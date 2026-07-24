@@ -810,6 +810,141 @@ var (
 			},
 		},
 	}
+	// ImageJobsColumns holds the columns for the "image_jobs" table.
+	ImageJobsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "public_id", Type: field.TypeString, Unique: true, Size: 64},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "api_key_id", Type: field.TypeInt64},
+		{Name: "group_id", Type: field.TypeInt64},
+		{Name: "endpoint", Type: field.TypeString, Size: 64},
+		{Name: "operation", Type: field.TypeString, Size: 32},
+		{Name: "mode", Type: field.TypeString, Size: 32},
+		{Name: "requested_model", Type: field.TypeString, Size: 128},
+		{Name: "mapped_model", Type: field.TypeString, Size: 128, Default: ""},
+		{Name: "status", Type: field.TypeString, Size: 32},
+		{Name: "requested_count", Type: field.TypeInt},
+		{Name: "completed_count", Type: field.TypeInt, Default: 0},
+		{Name: "request", Type: field.TypeJSON},
+		{Name: "request_digest", Type: field.TypeString, Size: 64},
+		{Name: "idempotency_key_hash", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "reserved_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "reservation_billing_type", Type: field.TypeInt, Default: 1},
+		{Name: "reservation_subscription_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "reservation_status", Type: field.TypeString, Size: 20, Default: "held"},
+		{Name: "usage", Type: field.TypeJSON, Nullable: true},
+		{Name: "settlement_status", Type: field.TypeString, Size: 20, Default: "pending"},
+		{Name: "attempt_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "worker_id", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "execution_phase", Type: field.TypeString, Size: 20, Default: "preflight"},
+		{Name: "heartbeat_at", Type: field.TypeTime, Nullable: true},
+		{Name: "cancel_requested_at", Type: field.TypeTime, Nullable: true},
+		{Name: "canceled_at", Type: field.TypeTime, Nullable: true},
+		{Name: "error_type", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "error_code", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "error_message", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "error_retryable", Type: field.TypeBool, Default: false},
+		{Name: "started_at", Type: field.TypeTime, Nullable: true},
+		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
+		{Name: "expires_at", Type: field.TypeTime},
+	}
+	// ImageJobsTable holds the schema information for the "image_jobs" table.
+	ImageJobsTable = &schema.Table{
+		Name:       "image_jobs",
+		Columns:    ImageJobsColumns,
+		PrimaryKey: []*schema.Column{ImageJobsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_image_jobs_api_key_idempotency",
+				Unique:  true,
+				Columns: []*schema.Column{ImageJobsColumns[5], ImageJobsColumns[17]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "idempotency_key_hash IS NOT NULL",
+				},
+			},
+			{
+				Name:    "idx_image_jobs_claim",
+				Unique:  false,
+				Columns: []*schema.Column{ImageJobsColumns[12], ImageJobsColumns[1], ImageJobsColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status IN ('queued','running')",
+				},
+			},
+		},
+	}
+	// ImageJobInputsColumns holds the columns for the "image_job_inputs" table.
+	ImageJobInputsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "index", Type: field.TypeInt},
+		{Name: "kind", Type: field.TypeString, Size: 32},
+		{Name: "object_key", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "mime_type", Type: field.TypeString, Size: 128},
+		{Name: "byte_size", Type: field.TypeInt64},
+		{Name: "sha256", Type: field.TypeString, Size: 64},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "job_id", Type: field.TypeInt64},
+	}
+	// ImageJobInputsTable holds the schema information for the "image_job_inputs" table.
+	ImageJobInputsTable = &schema.Table{
+		Name:       "image_job_inputs",
+		Columns:    ImageJobInputsColumns,
+		PrimaryKey: []*schema.Column{ImageJobInputsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "image_job_inputs_image_jobs_inputs",
+				Columns:    []*schema.Column{ImageJobInputsColumns[8]},
+				RefColumns: []*schema.Column{ImageJobsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_image_job_inputs_job_kind_index",
+				Unique:  true,
+				Columns: []*schema.Column{ImageJobInputsColumns[8], ImageJobInputsColumns[2], ImageJobInputsColumns[1]},
+			},
+		},
+	}
+	// ImageJobResultsColumns holds the columns for the "image_job_results" table.
+	ImageJobResultsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "index", Type: field.TypeInt},
+		{Name: "status", Type: field.TypeString, Size: 32},
+		{Name: "object_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "mime_type", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "byte_size", Type: field.TypeInt64, Nullable: true},
+		{Name: "width", Type: field.TypeInt, Nullable: true},
+		{Name: "height", Type: field.TypeInt, Nullable: true},
+		{Name: "size_tier", Type: field.TypeString, Nullable: true, Size: 16},
+		{Name: "revised_prompt", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "upstream_output_id", Type: field.TypeString, Nullable: true, Size: 128},
+		{Name: "job_id", Type: field.TypeInt64},
+	}
+	// ImageJobResultsTable holds the schema information for the "image_job_results" table.
+	ImageJobResultsTable = &schema.Table{
+		Name:       "image_job_results",
+		Columns:    ImageJobResultsColumns,
+		PrimaryKey: []*schema.Column{ImageJobResultsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "image_job_results_image_jobs_results",
+				Columns:    []*schema.Column{ImageJobResultsColumns[13]},
+				RefColumns: []*schema.Column{ImageJobsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_image_job_results_job_index",
+				Unique:  true,
+				Columns: []*schema.Column{ImageJobResultsColumns[13], ImageJobResultsColumns[3]},
+			},
+		},
+	}
 	// PaymentAuditLogsColumns holds the columns for the "payment_audit_logs" table.
 	PaymentAuditLogsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1807,6 +1942,9 @@ var (
 		GroupsTable,
 		IdempotencyRecordsTable,
 		IdentityAdoptionDecisionsTable,
+		ImageJobsTable,
+		ImageJobInputsTable,
+		ImageJobResultsTable,
 		PaymentAuditLogsTable,
 		PaymentOrdersTable,
 		PaymentProviderInstancesTable,
@@ -1890,6 +2028,17 @@ func init() {
 	IdentityAdoptionDecisionsTable.ForeignKeys[1].RefTable = PendingAuthSessionsTable
 	IdentityAdoptionDecisionsTable.Annotation = &entsql.Annotation{
 		Table: "identity_adoption_decisions",
+	}
+	ImageJobsTable.Annotation = &entsql.Annotation{
+		Table: "image_jobs",
+	}
+	ImageJobInputsTable.ForeignKeys[0].RefTable = ImageJobsTable
+	ImageJobInputsTable.Annotation = &entsql.Annotation{
+		Table: "image_job_inputs",
+	}
+	ImageJobResultsTable.ForeignKeys[0].RefTable = ImageJobsTable
+	ImageJobResultsTable.Annotation = &entsql.Annotation{
+		Table: "image_job_results",
 	}
 	PaymentAuditLogsTable.Annotation = &entsql.Annotation{
 		Table: "payment_audit_logs",

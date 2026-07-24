@@ -23,6 +23,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/imagejob"
+	"github.com/Wei-Shaw/sub2api/ent/imagejobinput"
+	"github.com/Wei-Shaw/sub2api/ent/imagejobresult"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
@@ -505,6 +508,87 @@ func (f TraverseIdentityAdoptionDecision) Traverse(ctx context.Context, q ent.Qu
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.IdentityAdoptionDecisionQuery", q)
+}
+
+// The ImageJobFunc type is an adapter to allow the use of ordinary function as a Querier.
+type ImageJobFunc func(context.Context, *ent.ImageJobQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f ImageJobFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.ImageJobQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.ImageJobQuery", q)
+}
+
+// The TraverseImageJob type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseImageJob func(context.Context, *ent.ImageJobQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseImageJob) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseImageJob) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.ImageJobQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.ImageJobQuery", q)
+}
+
+// The ImageJobInputFunc type is an adapter to allow the use of ordinary function as a Querier.
+type ImageJobInputFunc func(context.Context, *ent.ImageJobInputQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f ImageJobInputFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.ImageJobInputQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.ImageJobInputQuery", q)
+}
+
+// The TraverseImageJobInput type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseImageJobInput func(context.Context, *ent.ImageJobInputQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseImageJobInput) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseImageJobInput) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.ImageJobInputQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.ImageJobInputQuery", q)
+}
+
+// The ImageJobResultFunc type is an adapter to allow the use of ordinary function as a Querier.
+type ImageJobResultFunc func(context.Context, *ent.ImageJobResultQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f ImageJobResultFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.ImageJobResultQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.ImageJobResultQuery", q)
+}
+
+// The TraverseImageJobResult type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseImageJobResult func(context.Context, *ent.ImageJobResultQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseImageJobResult) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseImageJobResult) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.ImageJobResultQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.ImageJobResultQuery", q)
 }
 
 // The PaymentAuditLogFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1080,6 +1164,12 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.IdempotencyRecordQuery, predicate.IdempotencyRecord, idempotencyrecord.OrderOption]{typ: ent.TypeIdempotencyRecord, tq: q}, nil
 	case *ent.IdentityAdoptionDecisionQuery:
 		return &query[*ent.IdentityAdoptionDecisionQuery, predicate.IdentityAdoptionDecision, identityadoptiondecision.OrderOption]{typ: ent.TypeIdentityAdoptionDecision, tq: q}, nil
+	case *ent.ImageJobQuery:
+		return &query[*ent.ImageJobQuery, predicate.ImageJob, imagejob.OrderOption]{typ: ent.TypeImageJob, tq: q}, nil
+	case *ent.ImageJobInputQuery:
+		return &query[*ent.ImageJobInputQuery, predicate.ImageJobInput, imagejobinput.OrderOption]{typ: ent.TypeImageJobInput, tq: q}, nil
+	case *ent.ImageJobResultQuery:
+		return &query[*ent.ImageJobResultQuery, predicate.ImageJobResult, imagejobresult.OrderOption]{typ: ent.TypeImageJobResult, tq: q}, nil
 	case *ent.PaymentAuditLogQuery:
 		return &query[*ent.PaymentAuditLogQuery, predicate.PaymentAuditLog, paymentauditlog.OrderOption]{typ: ent.TypePaymentAuditLog, tq: q}, nil
 	case *ent.PaymentOrderQuery:

@@ -30,6 +30,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/imagejob"
+	"github.com/Wei-Shaw/sub2api/ent/imagejobinput"
+	"github.com/Wei-Shaw/sub2api/ent/imagejobresult"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
@@ -89,6 +92,12 @@ type Client struct {
 	IdempotencyRecord *IdempotencyRecordClient
 	// IdentityAdoptionDecision is the client for interacting with the IdentityAdoptionDecision builders.
 	IdentityAdoptionDecision *IdentityAdoptionDecisionClient
+	// ImageJob is the client for interacting with the ImageJob builders.
+	ImageJob *ImageJobClient
+	// ImageJobInput is the client for interacting with the ImageJobInput builders.
+	ImageJobInput *ImageJobInputClient
+	// ImageJobResult is the client for interacting with the ImageJobResult builders.
+	ImageJobResult *ImageJobResultClient
 	// PaymentAuditLog is the client for interacting with the PaymentAuditLog builders.
 	PaymentAuditLog *PaymentAuditLogClient
 	// PaymentOrder is the client for interacting with the PaymentOrder builders.
@@ -155,6 +164,9 @@ func (c *Client) init() {
 	c.Group = NewGroupClient(c.config)
 	c.IdempotencyRecord = NewIdempotencyRecordClient(c.config)
 	c.IdentityAdoptionDecision = NewIdentityAdoptionDecisionClient(c.config)
+	c.ImageJob = NewImageJobClient(c.config)
+	c.ImageJobInput = NewImageJobInputClient(c.config)
+	c.ImageJobResult = NewImageJobResultClient(c.config)
 	c.PaymentAuditLog = NewPaymentAuditLogClient(c.config)
 	c.PaymentOrder = NewPaymentOrderClient(c.config)
 	c.PaymentProviderInstance = NewPaymentProviderInstanceClient(c.config)
@@ -282,6 +294,9 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Group:                         NewGroupClient(cfg),
 		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
 		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
+		ImageJob:                      NewImageJobClient(cfg),
+		ImageJobInput:                 NewImageJobInputClient(cfg),
+		ImageJobResult:                NewImageJobResultClient(cfg),
 		PaymentAuditLog:               NewPaymentAuditLogClient(cfg),
 		PaymentOrder:                  NewPaymentOrderClient(cfg),
 		PaymentProviderInstance:       NewPaymentProviderInstanceClient(cfg),
@@ -336,6 +351,9 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Group:                         NewGroupClient(cfg),
 		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
 		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
+		ImageJob:                      NewImageJobClient(cfg),
+		ImageJobInput:                 NewImageJobInputClient(cfg),
+		ImageJobResult:                NewImageJobResultClient(cfg),
 		PaymentAuditLog:               NewPaymentAuditLogClient(cfg),
 		PaymentOrder:                  NewPaymentOrderClient(cfg),
 		PaymentProviderInstance:       NewPaymentProviderInstanceClient(cfg),
@@ -389,12 +407,13 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
 		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
-		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.ImageJob, c.ImageJobInput,
+		c.ImageJobResult, c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
+		c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode,
+		c.SecuritySecret, c.Setting, c.SubscriptionPlan, c.TLSFingerprintProfile,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
+		c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -408,12 +427,13 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
 		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
-		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.ImageJob, c.ImageJobInput,
+		c.ImageJobResult, c.PaymentAuditLog, c.PaymentOrder, c.PaymentProviderInstance,
+		c.PendingAuthSession, c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode,
+		c.SecuritySecret, c.Setting, c.SubscriptionPlan, c.TLSFingerprintProfile,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserPlatformQuota,
+		c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -452,6 +472,12 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IdempotencyRecord.mutate(ctx, m)
 	case *IdentityAdoptionDecisionMutation:
 		return c.IdentityAdoptionDecision.mutate(ctx, m)
+	case *ImageJobMutation:
+		return c.ImageJob.mutate(ctx, m)
+	case *ImageJobInputMutation:
+		return c.ImageJobInput.mutate(ctx, m)
+	case *ImageJobResultMutation:
+		return c.ImageJobResult.mutate(ctx, m)
 	case *PaymentAuditLogMutation:
 		return c.PaymentAuditLog.mutate(ctx, m)
 	case *PaymentOrderMutation:
@@ -2990,6 +3016,469 @@ func (c *IdentityAdoptionDecisionClient) mutate(ctx context.Context, m *Identity
 		return (&IdentityAdoptionDecisionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown IdentityAdoptionDecision mutation op: %q", m.Op())
+	}
+}
+
+// ImageJobClient is a client for the ImageJob schema.
+type ImageJobClient struct {
+	config
+}
+
+// NewImageJobClient returns a client for the ImageJob from the given config.
+func NewImageJobClient(c config) *ImageJobClient {
+	return &ImageJobClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `imagejob.Hooks(f(g(h())))`.
+func (c *ImageJobClient) Use(hooks ...Hook) {
+	c.hooks.ImageJob = append(c.hooks.ImageJob, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `imagejob.Intercept(f(g(h())))`.
+func (c *ImageJobClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ImageJob = append(c.inters.ImageJob, interceptors...)
+}
+
+// Create returns a builder for creating a ImageJob entity.
+func (c *ImageJobClient) Create() *ImageJobCreate {
+	mutation := newImageJobMutation(c.config, OpCreate)
+	return &ImageJobCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ImageJob entities.
+func (c *ImageJobClient) CreateBulk(builders ...*ImageJobCreate) *ImageJobCreateBulk {
+	return &ImageJobCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ImageJobClient) MapCreateBulk(slice any, setFunc func(*ImageJobCreate, int)) *ImageJobCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ImageJobCreateBulk{err: fmt.Errorf("calling to ImageJobClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ImageJobCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ImageJobCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ImageJob.
+func (c *ImageJobClient) Update() *ImageJobUpdate {
+	mutation := newImageJobMutation(c.config, OpUpdate)
+	return &ImageJobUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ImageJobClient) UpdateOne(_m *ImageJob) *ImageJobUpdateOne {
+	mutation := newImageJobMutation(c.config, OpUpdateOne, withImageJob(_m))
+	return &ImageJobUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ImageJobClient) UpdateOneID(id int64) *ImageJobUpdateOne {
+	mutation := newImageJobMutation(c.config, OpUpdateOne, withImageJobID(id))
+	return &ImageJobUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ImageJob.
+func (c *ImageJobClient) Delete() *ImageJobDelete {
+	mutation := newImageJobMutation(c.config, OpDelete)
+	return &ImageJobDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ImageJobClient) DeleteOne(_m *ImageJob) *ImageJobDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ImageJobClient) DeleteOneID(id int64) *ImageJobDeleteOne {
+	builder := c.Delete().Where(imagejob.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ImageJobDeleteOne{builder}
+}
+
+// Query returns a query builder for ImageJob.
+func (c *ImageJobClient) Query() *ImageJobQuery {
+	return &ImageJobQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeImageJob},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ImageJob entity by its id.
+func (c *ImageJobClient) Get(ctx context.Context, id int64) (*ImageJob, error) {
+	return c.Query().Where(imagejob.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ImageJobClient) GetX(ctx context.Context, id int64) *ImageJob {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryInputs queries the inputs edge of a ImageJob.
+func (c *ImageJobClient) QueryInputs(_m *ImageJob) *ImageJobInputQuery {
+	query := (&ImageJobInputClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(imagejob.Table, imagejob.FieldID, id),
+			sqlgraph.To(imagejobinput.Table, imagejobinput.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, imagejob.InputsTable, imagejob.InputsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryResults queries the results edge of a ImageJob.
+func (c *ImageJobClient) QueryResults(_m *ImageJob) *ImageJobResultQuery {
+	query := (&ImageJobResultClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(imagejob.Table, imagejob.FieldID, id),
+			sqlgraph.To(imagejobresult.Table, imagejobresult.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, imagejob.ResultsTable, imagejob.ResultsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ImageJobClient) Hooks() []Hook {
+	return c.hooks.ImageJob
+}
+
+// Interceptors returns the client interceptors.
+func (c *ImageJobClient) Interceptors() []Interceptor {
+	return c.inters.ImageJob
+}
+
+func (c *ImageJobClient) mutate(ctx context.Context, m *ImageJobMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ImageJobCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ImageJobUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ImageJobUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ImageJobDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ImageJob mutation op: %q", m.Op())
+	}
+}
+
+// ImageJobInputClient is a client for the ImageJobInput schema.
+type ImageJobInputClient struct {
+	config
+}
+
+// NewImageJobInputClient returns a client for the ImageJobInput from the given config.
+func NewImageJobInputClient(c config) *ImageJobInputClient {
+	return &ImageJobInputClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `imagejobinput.Hooks(f(g(h())))`.
+func (c *ImageJobInputClient) Use(hooks ...Hook) {
+	c.hooks.ImageJobInput = append(c.hooks.ImageJobInput, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `imagejobinput.Intercept(f(g(h())))`.
+func (c *ImageJobInputClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ImageJobInput = append(c.inters.ImageJobInput, interceptors...)
+}
+
+// Create returns a builder for creating a ImageJobInput entity.
+func (c *ImageJobInputClient) Create() *ImageJobInputCreate {
+	mutation := newImageJobInputMutation(c.config, OpCreate)
+	return &ImageJobInputCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ImageJobInput entities.
+func (c *ImageJobInputClient) CreateBulk(builders ...*ImageJobInputCreate) *ImageJobInputCreateBulk {
+	return &ImageJobInputCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ImageJobInputClient) MapCreateBulk(slice any, setFunc func(*ImageJobInputCreate, int)) *ImageJobInputCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ImageJobInputCreateBulk{err: fmt.Errorf("calling to ImageJobInputClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ImageJobInputCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ImageJobInputCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ImageJobInput.
+func (c *ImageJobInputClient) Update() *ImageJobInputUpdate {
+	mutation := newImageJobInputMutation(c.config, OpUpdate)
+	return &ImageJobInputUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ImageJobInputClient) UpdateOne(_m *ImageJobInput) *ImageJobInputUpdateOne {
+	mutation := newImageJobInputMutation(c.config, OpUpdateOne, withImageJobInput(_m))
+	return &ImageJobInputUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ImageJobInputClient) UpdateOneID(id int64) *ImageJobInputUpdateOne {
+	mutation := newImageJobInputMutation(c.config, OpUpdateOne, withImageJobInputID(id))
+	return &ImageJobInputUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ImageJobInput.
+func (c *ImageJobInputClient) Delete() *ImageJobInputDelete {
+	mutation := newImageJobInputMutation(c.config, OpDelete)
+	return &ImageJobInputDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ImageJobInputClient) DeleteOne(_m *ImageJobInput) *ImageJobInputDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ImageJobInputClient) DeleteOneID(id int64) *ImageJobInputDeleteOne {
+	builder := c.Delete().Where(imagejobinput.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ImageJobInputDeleteOne{builder}
+}
+
+// Query returns a query builder for ImageJobInput.
+func (c *ImageJobInputClient) Query() *ImageJobInputQuery {
+	return &ImageJobInputQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeImageJobInput},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ImageJobInput entity by its id.
+func (c *ImageJobInputClient) Get(ctx context.Context, id int64) (*ImageJobInput, error) {
+	return c.Query().Where(imagejobinput.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ImageJobInputClient) GetX(ctx context.Context, id int64) *ImageJobInput {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryJob queries the job edge of a ImageJobInput.
+func (c *ImageJobInputClient) QueryJob(_m *ImageJobInput) *ImageJobQuery {
+	query := (&ImageJobClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(imagejobinput.Table, imagejobinput.FieldID, id),
+			sqlgraph.To(imagejob.Table, imagejob.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, imagejobinput.JobTable, imagejobinput.JobColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ImageJobInputClient) Hooks() []Hook {
+	return c.hooks.ImageJobInput
+}
+
+// Interceptors returns the client interceptors.
+func (c *ImageJobInputClient) Interceptors() []Interceptor {
+	return c.inters.ImageJobInput
+}
+
+func (c *ImageJobInputClient) mutate(ctx context.Context, m *ImageJobInputMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ImageJobInputCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ImageJobInputUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ImageJobInputUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ImageJobInputDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ImageJobInput mutation op: %q", m.Op())
+	}
+}
+
+// ImageJobResultClient is a client for the ImageJobResult schema.
+type ImageJobResultClient struct {
+	config
+}
+
+// NewImageJobResultClient returns a client for the ImageJobResult from the given config.
+func NewImageJobResultClient(c config) *ImageJobResultClient {
+	return &ImageJobResultClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `imagejobresult.Hooks(f(g(h())))`.
+func (c *ImageJobResultClient) Use(hooks ...Hook) {
+	c.hooks.ImageJobResult = append(c.hooks.ImageJobResult, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `imagejobresult.Intercept(f(g(h())))`.
+func (c *ImageJobResultClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ImageJobResult = append(c.inters.ImageJobResult, interceptors...)
+}
+
+// Create returns a builder for creating a ImageJobResult entity.
+func (c *ImageJobResultClient) Create() *ImageJobResultCreate {
+	mutation := newImageJobResultMutation(c.config, OpCreate)
+	return &ImageJobResultCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ImageJobResult entities.
+func (c *ImageJobResultClient) CreateBulk(builders ...*ImageJobResultCreate) *ImageJobResultCreateBulk {
+	return &ImageJobResultCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ImageJobResultClient) MapCreateBulk(slice any, setFunc func(*ImageJobResultCreate, int)) *ImageJobResultCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ImageJobResultCreateBulk{err: fmt.Errorf("calling to ImageJobResultClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ImageJobResultCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ImageJobResultCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ImageJobResult.
+func (c *ImageJobResultClient) Update() *ImageJobResultUpdate {
+	mutation := newImageJobResultMutation(c.config, OpUpdate)
+	return &ImageJobResultUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ImageJobResultClient) UpdateOne(_m *ImageJobResult) *ImageJobResultUpdateOne {
+	mutation := newImageJobResultMutation(c.config, OpUpdateOne, withImageJobResult(_m))
+	return &ImageJobResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ImageJobResultClient) UpdateOneID(id int64) *ImageJobResultUpdateOne {
+	mutation := newImageJobResultMutation(c.config, OpUpdateOne, withImageJobResultID(id))
+	return &ImageJobResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ImageJobResult.
+func (c *ImageJobResultClient) Delete() *ImageJobResultDelete {
+	mutation := newImageJobResultMutation(c.config, OpDelete)
+	return &ImageJobResultDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ImageJobResultClient) DeleteOne(_m *ImageJobResult) *ImageJobResultDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ImageJobResultClient) DeleteOneID(id int64) *ImageJobResultDeleteOne {
+	builder := c.Delete().Where(imagejobresult.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ImageJobResultDeleteOne{builder}
+}
+
+// Query returns a query builder for ImageJobResult.
+func (c *ImageJobResultClient) Query() *ImageJobResultQuery {
+	return &ImageJobResultQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeImageJobResult},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ImageJobResult entity by its id.
+func (c *ImageJobResultClient) Get(ctx context.Context, id int64) (*ImageJobResult, error) {
+	return c.Query().Where(imagejobresult.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ImageJobResultClient) GetX(ctx context.Context, id int64) *ImageJobResult {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryJob queries the job edge of a ImageJobResult.
+func (c *ImageJobResultClient) QueryJob(_m *ImageJobResult) *ImageJobQuery {
+	query := (&ImageJobClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(imagejobresult.Table, imagejobresult.FieldID, id),
+			sqlgraph.To(imagejob.Table, imagejob.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, imagejobresult.JobTable, imagejobresult.JobColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ImageJobResultClient) Hooks() []Hook {
+	return c.hooks.ImageJobResult
+}
+
+// Interceptors returns the client interceptors.
+func (c *ImageJobResultClient) Interceptors() []Interceptor {
+	return c.inters.ImageJobResult
+}
+
+func (c *ImageJobResultClient) mutate(ctx context.Context, m *ImageJobResultMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ImageJobResultCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ImageJobResultUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ImageJobResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ImageJobResultDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ImageJobResult mutation op: %q", m.Op())
 	}
 }
 
@@ -6244,23 +6733,23 @@ type (
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
-		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
-		UserSubscription []ent.Hook
+		Group, IdempotencyRecord, IdentityAdoptionDecision, ImageJob, ImageJobInput,
+		ImageJobResult, PaymentAuditLog, PaymentOrder, PaymentProviderInstance,
+		PendingAuthSession, PromoCode, PromoCodeUsage, Proxy, RedeemCode,
+		SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
-		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserPlatformQuota,
-		UserSubscription []ent.Interceptor
+		Group, IdempotencyRecord, IdentityAdoptionDecision, ImageJob, ImageJobInput,
+		ImageJobResult, PaymentAuditLog, PaymentOrder, PaymentProviderInstance,
+		PendingAuthSession, PromoCode, PromoCodeUsage, Proxy, RedeemCode,
+		SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Interceptor
 	}
 )
 
