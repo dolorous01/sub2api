@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,6 +29,38 @@ func TestImageJobsConfigValidate(t *testing.T) {
 
 	cfg.MaxInputImages = 17
 	require.EqualError(t, cfg.Validate(), "gateway.image_jobs.max_input_images must be between 1 and 16")
+}
+
+func TestImageJobsConfigRejectsNonFiniteReservation(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		value float64
+	}{
+		{name: "NaN", value: math.NaN()},
+		{name: "positive infinity", value: math.Inf(1)},
+		{name: "negative infinity", value: math.Inf(-1)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validImageJobsConfig()
+			cfg.MaxReservationUSD = tt.value
+			require.EqualError(t, cfg.Validate(), "gateway.image_jobs.max_reservation_usd must be finite")
+		})
+	}
+}
+
+func TestImageJobsConfigRejectsWhitespacePaddedStorageValues(t *testing.T) {
+	t.Run("local directory", func(t *testing.T) {
+		cfg := validImageJobsConfig()
+		cfg.Storage.Driver = "local"
+		cfg.Storage.LocalDirectory = " /var/lib/sub2api/image-jobs "
+		require.EqualError(t, cfg.Validate(), "gateway.image_jobs.storage.local_directory must be an absolute path when storage.driver=local")
+	})
+
+	t.Run("driver", func(t *testing.T) {
+		cfg := validImageJobsConfig()
+		cfg.Storage.Driver = " s3 "
+		require.EqualError(t, cfg.Validate(), "gateway.image_jobs.storage.driver must be one of: s3/local")
+	})
 }
 
 func TestImageJobsConfigValidateRules(t *testing.T) {

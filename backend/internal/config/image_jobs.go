@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"path/filepath"
 	"strings"
 )
@@ -74,6 +75,9 @@ func (c ImageJobsConfig) Validate() error {
 	if c.ResultTTLSeconds <= 0 {
 		return fmt.Errorf("gateway.image_jobs.result_ttl_seconds must be positive")
 	}
+	if math.IsNaN(c.MaxReservationUSD) || math.IsInf(c.MaxReservationUSD, 0) {
+		return fmt.Errorf("gateway.image_jobs.max_reservation_usd must be finite")
+	}
 	if c.MaxReservationUSD <= 0 {
 		return fmt.Errorf("gateway.image_jobs.max_reservation_usd must be positive")
 	}
@@ -81,7 +85,7 @@ func (c ImageJobsConfig) Validate() error {
 		return nil
 	}
 
-	switch strings.TrimSpace(c.Storage.Driver) {
+	switch c.Storage.Driver {
 	case "s3":
 		if strings.TrimSpace(c.Storage.Bucket) == "" {
 			return fmt.Errorf("gateway.image_jobs.storage.bucket is required when storage.driver=s3")
@@ -93,7 +97,7 @@ func (c ImageJobsConfig) Validate() error {
 			return fmt.Errorf("gateway.image_jobs.storage.secret_access_key is required when storage.driver=s3")
 		}
 	case "local":
-		if !filepath.IsAbs(strings.TrimSpace(c.Storage.LocalDirectory)) {
+		if !filepath.IsAbs(c.Storage.LocalDirectory) {
 			return fmt.Errorf("gateway.image_jobs.storage.local_directory must be an absolute path when storage.driver=local")
 		}
 	default:
