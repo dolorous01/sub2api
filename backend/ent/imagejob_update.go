@@ -13,10 +13,13 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
+	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/imagejob"
 	"github.com/Wei-Shaw/sub2api/ent/imagejobinput"
 	"github.com/Wei-Shaw/sub2api/ent/imagejobresult"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
 // ImageJobUpdate is the builder for updating ImageJob entities.
@@ -54,7 +57,6 @@ func (_u *ImageJobUpdate) SetNillablePublicID(v *string) *ImageJobUpdate {
 
 // SetUserID sets the "user_id" field.
 func (_u *ImageJobUpdate) SetUserID(v int64) *ImageJobUpdate {
-	_u.mutation.ResetUserID()
 	_u.mutation.SetUserID(v)
 	return _u
 }
@@ -67,15 +69,8 @@ func (_u *ImageJobUpdate) SetNillableUserID(v *int64) *ImageJobUpdate {
 	return _u
 }
 
-// AddUserID adds value to the "user_id" field.
-func (_u *ImageJobUpdate) AddUserID(v int64) *ImageJobUpdate {
-	_u.mutation.AddUserID(v)
-	return _u
-}
-
 // SetAPIKeyID sets the "api_key_id" field.
 func (_u *ImageJobUpdate) SetAPIKeyID(v int64) *ImageJobUpdate {
-	_u.mutation.ResetAPIKeyID()
 	_u.mutation.SetAPIKeyID(v)
 	return _u
 }
@@ -88,15 +83,8 @@ func (_u *ImageJobUpdate) SetNillableAPIKeyID(v *int64) *ImageJobUpdate {
 	return _u
 }
 
-// AddAPIKeyID adds value to the "api_key_id" field.
-func (_u *ImageJobUpdate) AddAPIKeyID(v int64) *ImageJobUpdate {
-	_u.mutation.AddAPIKeyID(v)
-	return _u
-}
-
 // SetGroupID sets the "group_id" field.
 func (_u *ImageJobUpdate) SetGroupID(v int64) *ImageJobUpdate {
-	_u.mutation.ResetGroupID()
 	_u.mutation.SetGroupID(v)
 	return _u
 }
@@ -106,12 +94,6 @@ func (_u *ImageJobUpdate) SetNillableGroupID(v *int64) *ImageJobUpdate {
 	if v != nil {
 		_u.SetGroupID(*v)
 	}
-	return _u
-}
-
-// AddGroupID adds value to the "group_id" field.
-func (_u *ImageJobUpdate) AddGroupID(v int64) *ImageJobUpdate {
-	_u.mutation.AddGroupID(v)
 	return _u
 }
 
@@ -644,6 +626,21 @@ func (_u *ImageJobUpdate) SetNillableExpiresAt(v *time.Time) *ImageJobUpdate {
 	return _u
 }
 
+// SetUser sets the "user" edge to the User entity.
+func (_u *ImageJobUpdate) SetUser(v *User) *ImageJobUpdate {
+	return _u.SetUserID(v.ID)
+}
+
+// SetAPIKey sets the "api_key" edge to the APIKey entity.
+func (_u *ImageJobUpdate) SetAPIKey(v *APIKey) *ImageJobUpdate {
+	return _u.SetAPIKeyID(v.ID)
+}
+
+// SetGroup sets the "group" edge to the Group entity.
+func (_u *ImageJobUpdate) SetGroup(v *Group) *ImageJobUpdate {
+	return _u.SetGroupID(v.ID)
+}
+
 // AddInputIDs adds the "inputs" edge to the ImageJobInput entity by IDs.
 func (_u *ImageJobUpdate) AddInputIDs(ids ...int64) *ImageJobUpdate {
 	_u.mutation.AddInputIDs(ids...)
@@ -677,6 +674,24 @@ func (_u *ImageJobUpdate) AddResults(v ...*ImageJobResult) *ImageJobUpdate {
 // Mutation returns the ImageJobMutation object of the builder.
 func (_u *ImageJobUpdate) Mutation() *ImageJobMutation {
 	return _u.mutation
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (_u *ImageJobUpdate) ClearUser() *ImageJobUpdate {
+	_u.mutation.ClearUser()
+	return _u
+}
+
+// ClearAPIKey clears the "api_key" edge to the APIKey entity.
+func (_u *ImageJobUpdate) ClearAPIKey() *ImageJobUpdate {
+	_u.mutation.ClearAPIKey()
+	return _u
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (_u *ImageJobUpdate) ClearGroup() *ImageJobUpdate {
+	_u.mutation.ClearGroup()
+	return _u
 }
 
 // ClearInputs clears all "inputs" edges to the ImageJobInput entity.
@@ -839,6 +854,15 @@ func (_u *ImageJobUpdate) check() error {
 			return &ValidationError{Name: "error_code", err: fmt.Errorf(`ent: validator failed for field "ImageJob.error_code": %w`, err)}
 		}
 	}
+	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "ImageJob.user"`)
+	}
+	if _u.mutation.APIKeyCleared() && len(_u.mutation.APIKeyIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "ImageJob.api_key"`)
+	}
+	if _u.mutation.GroupCleared() && len(_u.mutation.GroupIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "ImageJob.group"`)
+	}
 	return nil
 }
 
@@ -859,24 +883,6 @@ func (_u *ImageJobUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.PublicID(); ok {
 		_spec.SetField(imagejob.FieldPublicID, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.UserID(); ok {
-		_spec.SetField(imagejob.FieldUserID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedUserID(); ok {
-		_spec.AddField(imagejob.FieldUserID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.APIKeyID(); ok {
-		_spec.SetField(imagejob.FieldAPIKeyID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedAPIKeyID(); ok {
-		_spec.AddField(imagejob.FieldAPIKeyID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.GroupID(); ok {
-		_spec.SetField(imagejob.FieldGroupID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedGroupID(); ok {
-		_spec.AddField(imagejob.FieldGroupID, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.Endpoint(); ok {
 		_spec.SetField(imagejob.FieldEndpoint, field.TypeString, value)
@@ -1032,6 +1038,93 @@ func (_u *ImageJobUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(imagejob.FieldExpiresAt, field.TypeTime, value)
 	}
+	if _u.mutation.UserCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.UserTable,
+			Columns: []string{imagejob.UserColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.UserIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.UserTable,
+			Columns: []string{imagejob.UserColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.APIKeyCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.APIKeyTable,
+			Columns: []string{imagejob.APIKeyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(apikey.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.APIKeyIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.APIKeyTable,
+			Columns: []string{imagejob.APIKeyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(apikey.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.GroupCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.GroupTable,
+			Columns: []string{imagejob.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.GroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.GroupTable,
+			Columns: []string{imagejob.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _u.mutation.InputsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -1164,7 +1257,6 @@ func (_u *ImageJobUpdateOne) SetNillablePublicID(v *string) *ImageJobUpdateOne {
 
 // SetUserID sets the "user_id" field.
 func (_u *ImageJobUpdateOne) SetUserID(v int64) *ImageJobUpdateOne {
-	_u.mutation.ResetUserID()
 	_u.mutation.SetUserID(v)
 	return _u
 }
@@ -1177,15 +1269,8 @@ func (_u *ImageJobUpdateOne) SetNillableUserID(v *int64) *ImageJobUpdateOne {
 	return _u
 }
 
-// AddUserID adds value to the "user_id" field.
-func (_u *ImageJobUpdateOne) AddUserID(v int64) *ImageJobUpdateOne {
-	_u.mutation.AddUserID(v)
-	return _u
-}
-
 // SetAPIKeyID sets the "api_key_id" field.
 func (_u *ImageJobUpdateOne) SetAPIKeyID(v int64) *ImageJobUpdateOne {
-	_u.mutation.ResetAPIKeyID()
 	_u.mutation.SetAPIKeyID(v)
 	return _u
 }
@@ -1198,15 +1283,8 @@ func (_u *ImageJobUpdateOne) SetNillableAPIKeyID(v *int64) *ImageJobUpdateOne {
 	return _u
 }
 
-// AddAPIKeyID adds value to the "api_key_id" field.
-func (_u *ImageJobUpdateOne) AddAPIKeyID(v int64) *ImageJobUpdateOne {
-	_u.mutation.AddAPIKeyID(v)
-	return _u
-}
-
 // SetGroupID sets the "group_id" field.
 func (_u *ImageJobUpdateOne) SetGroupID(v int64) *ImageJobUpdateOne {
-	_u.mutation.ResetGroupID()
 	_u.mutation.SetGroupID(v)
 	return _u
 }
@@ -1216,12 +1294,6 @@ func (_u *ImageJobUpdateOne) SetNillableGroupID(v *int64) *ImageJobUpdateOne {
 	if v != nil {
 		_u.SetGroupID(*v)
 	}
-	return _u
-}
-
-// AddGroupID adds value to the "group_id" field.
-func (_u *ImageJobUpdateOne) AddGroupID(v int64) *ImageJobUpdateOne {
-	_u.mutation.AddGroupID(v)
 	return _u
 }
 
@@ -1754,6 +1826,21 @@ func (_u *ImageJobUpdateOne) SetNillableExpiresAt(v *time.Time) *ImageJobUpdateO
 	return _u
 }
 
+// SetUser sets the "user" edge to the User entity.
+func (_u *ImageJobUpdateOne) SetUser(v *User) *ImageJobUpdateOne {
+	return _u.SetUserID(v.ID)
+}
+
+// SetAPIKey sets the "api_key" edge to the APIKey entity.
+func (_u *ImageJobUpdateOne) SetAPIKey(v *APIKey) *ImageJobUpdateOne {
+	return _u.SetAPIKeyID(v.ID)
+}
+
+// SetGroup sets the "group" edge to the Group entity.
+func (_u *ImageJobUpdateOne) SetGroup(v *Group) *ImageJobUpdateOne {
+	return _u.SetGroupID(v.ID)
+}
+
 // AddInputIDs adds the "inputs" edge to the ImageJobInput entity by IDs.
 func (_u *ImageJobUpdateOne) AddInputIDs(ids ...int64) *ImageJobUpdateOne {
 	_u.mutation.AddInputIDs(ids...)
@@ -1787,6 +1874,24 @@ func (_u *ImageJobUpdateOne) AddResults(v ...*ImageJobResult) *ImageJobUpdateOne
 // Mutation returns the ImageJobMutation object of the builder.
 func (_u *ImageJobUpdateOne) Mutation() *ImageJobMutation {
 	return _u.mutation
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (_u *ImageJobUpdateOne) ClearUser() *ImageJobUpdateOne {
+	_u.mutation.ClearUser()
+	return _u
+}
+
+// ClearAPIKey clears the "api_key" edge to the APIKey entity.
+func (_u *ImageJobUpdateOne) ClearAPIKey() *ImageJobUpdateOne {
+	_u.mutation.ClearAPIKey()
+	return _u
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (_u *ImageJobUpdateOne) ClearGroup() *ImageJobUpdateOne {
+	_u.mutation.ClearGroup()
+	return _u
 }
 
 // ClearInputs clears all "inputs" edges to the ImageJobInput entity.
@@ -1962,6 +2067,15 @@ func (_u *ImageJobUpdateOne) check() error {
 			return &ValidationError{Name: "error_code", err: fmt.Errorf(`ent: validator failed for field "ImageJob.error_code": %w`, err)}
 		}
 	}
+	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "ImageJob.user"`)
+	}
+	if _u.mutation.APIKeyCleared() && len(_u.mutation.APIKeyIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "ImageJob.api_key"`)
+	}
+	if _u.mutation.GroupCleared() && len(_u.mutation.GroupIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "ImageJob.group"`)
+	}
 	return nil
 }
 
@@ -1999,24 +2113,6 @@ func (_u *ImageJobUpdateOne) sqlSave(ctx context.Context) (_node *ImageJob, err 
 	}
 	if value, ok := _u.mutation.PublicID(); ok {
 		_spec.SetField(imagejob.FieldPublicID, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.UserID(); ok {
-		_spec.SetField(imagejob.FieldUserID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedUserID(); ok {
-		_spec.AddField(imagejob.FieldUserID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.APIKeyID(); ok {
-		_spec.SetField(imagejob.FieldAPIKeyID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedAPIKeyID(); ok {
-		_spec.AddField(imagejob.FieldAPIKeyID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.GroupID(); ok {
-		_spec.SetField(imagejob.FieldGroupID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedGroupID(); ok {
-		_spec.AddField(imagejob.FieldGroupID, field.TypeInt64, value)
 	}
 	if value, ok := _u.mutation.Endpoint(); ok {
 		_spec.SetField(imagejob.FieldEndpoint, field.TypeString, value)
@@ -2171,6 +2267,93 @@ func (_u *ImageJobUpdateOne) sqlSave(ctx context.Context) (_node *ImageJob, err 
 	}
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(imagejob.FieldExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.UserCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.UserTable,
+			Columns: []string{imagejob.UserColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.UserIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.UserTable,
+			Columns: []string{imagejob.UserColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.APIKeyCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.APIKeyTable,
+			Columns: []string{imagejob.APIKeyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(apikey.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.APIKeyIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.APIKeyTable,
+			Columns: []string{imagejob.APIKeyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(apikey.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.GroupCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.GroupTable,
+			Columns: []string{imagejob.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.GroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.GroupTable,
+			Columns: []string{imagejob.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _u.mutation.InputsCleared() {
 		edge := &sqlgraph.EdgeSpec{

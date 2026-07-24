@@ -3127,6 +3127,54 @@ func (c *ImageJobClient) GetX(ctx context.Context, id int64) *ImageJob {
 	return obj
 }
 
+// QueryUser queries the user edge of a ImageJob.
+func (c *ImageJobClient) QueryUser(_m *ImageJob) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(imagejob.Table, imagejob.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, imagejob.UserTable, imagejob.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryAPIKey queries the api_key edge of a ImageJob.
+func (c *ImageJobClient) QueryAPIKey(_m *ImageJob) *APIKeyQuery {
+	query := (&APIKeyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(imagejob.Table, imagejob.FieldID, id),
+			sqlgraph.To(apikey.Table, apikey.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, imagejob.APIKeyTable, imagejob.APIKeyColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryGroup queries the group edge of a ImageJob.
+func (c *ImageJobClient) QueryGroup(_m *ImageJob) *GroupQuery {
+	query := (&GroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(imagejob.Table, imagejob.FieldID, id),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, imagejob.GroupTable, imagejob.GroupColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryInputs queries the inputs edge of a ImageJob.
 func (c *ImageJobClient) QueryInputs(_m *ImageJob) *ImageJobInputQuery {
 	query := (&ImageJobInputClient{config: c.config}).Query()

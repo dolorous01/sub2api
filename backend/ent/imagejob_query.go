@@ -13,10 +13,13 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/imagejob"
 	"github.com/Wei-Shaw/sub2api/ent/imagejobinput"
 	"github.com/Wei-Shaw/sub2api/ent/imagejobresult"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
 // ImageJobQuery is the builder for querying ImageJob entities.
@@ -26,6 +29,9 @@ type ImageJobQuery struct {
 	order       []imagejob.OrderOption
 	inters      []Interceptor
 	predicates  []predicate.ImageJob
+	withUser    *UserQuery
+	withAPIKey  *APIKeyQuery
+	withGroup   *GroupQuery
 	withInputs  *ImageJobInputQuery
 	withResults *ImageJobResultQuery
 	modifiers   []func(*sql.Selector)
@@ -63,6 +69,72 @@ func (_q *ImageJobQuery) Unique(unique bool) *ImageJobQuery {
 func (_q *ImageJobQuery) Order(o ...imagejob.OrderOption) *ImageJobQuery {
 	_q.order = append(_q.order, o...)
 	return _q
+}
+
+// QueryUser chains the current query on the "user" edge.
+func (_q *ImageJobQuery) QueryUser() *UserQuery {
+	query := (&UserClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(imagejob.Table, imagejob.FieldID, selector),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, imagejob.UserTable, imagejob.UserColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryAPIKey chains the current query on the "api_key" edge.
+func (_q *ImageJobQuery) QueryAPIKey() *APIKeyQuery {
+	query := (&APIKeyClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(imagejob.Table, imagejob.FieldID, selector),
+			sqlgraph.To(apikey.Table, apikey.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, imagejob.APIKeyTable, imagejob.APIKeyColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryGroup chains the current query on the "group" edge.
+func (_q *ImageJobQuery) QueryGroup() *GroupQuery {
+	query := (&GroupClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(imagejob.Table, imagejob.FieldID, selector),
+			sqlgraph.To(group.Table, group.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, imagejob.GroupTable, imagejob.GroupColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // QueryInputs chains the current query on the "inputs" edge.
@@ -301,12 +373,48 @@ func (_q *ImageJobQuery) Clone() *ImageJobQuery {
 		order:       append([]imagejob.OrderOption{}, _q.order...),
 		inters:      append([]Interceptor{}, _q.inters...),
 		predicates:  append([]predicate.ImageJob{}, _q.predicates...),
+		withUser:    _q.withUser.Clone(),
+		withAPIKey:  _q.withAPIKey.Clone(),
+		withGroup:   _q.withGroup.Clone(),
 		withInputs:  _q.withInputs.Clone(),
 		withResults: _q.withResults.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithUser tells the query-builder to eager-load the nodes that are connected to
+// the "user" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ImageJobQuery) WithUser(opts ...func(*UserQuery)) *ImageJobQuery {
+	query := (&UserClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withUser = query
+	return _q
+}
+
+// WithAPIKey tells the query-builder to eager-load the nodes that are connected to
+// the "api_key" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ImageJobQuery) WithAPIKey(opts ...func(*APIKeyQuery)) *ImageJobQuery {
+	query := (&APIKeyClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withAPIKey = query
+	return _q
+}
+
+// WithGroup tells the query-builder to eager-load the nodes that are connected to
+// the "group" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ImageJobQuery) WithGroup(opts ...func(*GroupQuery)) *ImageJobQuery {
+	query := (&GroupClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withGroup = query
+	return _q
 }
 
 // WithInputs tells the query-builder to eager-load the nodes that are connected to
@@ -409,7 +517,10 @@ func (_q *ImageJobQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Ima
 	var (
 		nodes       = []*ImageJob{}
 		_spec       = _q.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [5]bool{
+			_q.withUser != nil,
+			_q.withAPIKey != nil,
+			_q.withGroup != nil,
 			_q.withInputs != nil,
 			_q.withResults != nil,
 		}
@@ -435,6 +546,24 @@ func (_q *ImageJobQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Ima
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withUser; query != nil {
+		if err := _q.loadUser(ctx, query, nodes, nil,
+			func(n *ImageJob, e *User) { n.Edges.User = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withAPIKey; query != nil {
+		if err := _q.loadAPIKey(ctx, query, nodes, nil,
+			func(n *ImageJob, e *APIKey) { n.Edges.APIKey = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withGroup; query != nil {
+		if err := _q.loadGroup(ctx, query, nodes, nil,
+			func(n *ImageJob, e *Group) { n.Edges.Group = e }); err != nil {
+			return nil, err
+		}
+	}
 	if query := _q.withInputs; query != nil {
 		if err := _q.loadInputs(ctx, query, nodes,
 			func(n *ImageJob) { n.Edges.Inputs = []*ImageJobInput{} },
@@ -452,6 +581,93 @@ func (_q *ImageJobQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Ima
 	return nodes, nil
 }
 
+func (_q *ImageJobQuery) loadUser(ctx context.Context, query *UserQuery, nodes []*ImageJob, init func(*ImageJob), assign func(*ImageJob, *User)) error {
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*ImageJob)
+	for i := range nodes {
+		fk := nodes[i].UserID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(user.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "user_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
+func (_q *ImageJobQuery) loadAPIKey(ctx context.Context, query *APIKeyQuery, nodes []*ImageJob, init func(*ImageJob), assign func(*ImageJob, *APIKey)) error {
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*ImageJob)
+	for i := range nodes {
+		fk := nodes[i].APIKeyID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(apikey.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "api_key_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
+func (_q *ImageJobQuery) loadGroup(ctx context.Context, query *GroupQuery, nodes []*ImageJob, init func(*ImageJob), assign func(*ImageJob, *Group)) error {
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*ImageJob)
+	for i := range nodes {
+		fk := nodes[i].GroupID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(group.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "group_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
 func (_q *ImageJobQuery) loadInputs(ctx context.Context, query *ImageJobInputQuery, nodes []*ImageJob, init func(*ImageJob), assign func(*ImageJob, *ImageJobInput)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[int64]*ImageJob)
@@ -540,6 +756,15 @@ func (_q *ImageJobQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != imagejob.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withUser != nil {
+			_spec.Node.AddColumnOnce(imagejob.FieldUserID)
+		}
+		if _q.withAPIKey != nil {
+			_spec.Node.AddColumnOnce(imagejob.FieldAPIKeyID)
+		}
+		if _q.withGroup != nil {
+			_spec.Node.AddColumnOnce(imagejob.FieldGroupID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

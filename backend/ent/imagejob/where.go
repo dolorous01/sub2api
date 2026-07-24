@@ -390,26 +390,6 @@ func UserIDNotIn(vs ...int64) predicate.ImageJob {
 	return predicate.ImageJob(sql.FieldNotIn(FieldUserID, vs...))
 }
 
-// UserIDGT applies the GT predicate on the "user_id" field.
-func UserIDGT(v int64) predicate.ImageJob {
-	return predicate.ImageJob(sql.FieldGT(FieldUserID, v))
-}
-
-// UserIDGTE applies the GTE predicate on the "user_id" field.
-func UserIDGTE(v int64) predicate.ImageJob {
-	return predicate.ImageJob(sql.FieldGTE(FieldUserID, v))
-}
-
-// UserIDLT applies the LT predicate on the "user_id" field.
-func UserIDLT(v int64) predicate.ImageJob {
-	return predicate.ImageJob(sql.FieldLT(FieldUserID, v))
-}
-
-// UserIDLTE applies the LTE predicate on the "user_id" field.
-func UserIDLTE(v int64) predicate.ImageJob {
-	return predicate.ImageJob(sql.FieldLTE(FieldUserID, v))
-}
-
 // APIKeyIDEQ applies the EQ predicate on the "api_key_id" field.
 func APIKeyIDEQ(v int64) predicate.ImageJob {
 	return predicate.ImageJob(sql.FieldEQ(FieldAPIKeyID, v))
@@ -430,26 +410,6 @@ func APIKeyIDNotIn(vs ...int64) predicate.ImageJob {
 	return predicate.ImageJob(sql.FieldNotIn(FieldAPIKeyID, vs...))
 }
 
-// APIKeyIDGT applies the GT predicate on the "api_key_id" field.
-func APIKeyIDGT(v int64) predicate.ImageJob {
-	return predicate.ImageJob(sql.FieldGT(FieldAPIKeyID, v))
-}
-
-// APIKeyIDGTE applies the GTE predicate on the "api_key_id" field.
-func APIKeyIDGTE(v int64) predicate.ImageJob {
-	return predicate.ImageJob(sql.FieldGTE(FieldAPIKeyID, v))
-}
-
-// APIKeyIDLT applies the LT predicate on the "api_key_id" field.
-func APIKeyIDLT(v int64) predicate.ImageJob {
-	return predicate.ImageJob(sql.FieldLT(FieldAPIKeyID, v))
-}
-
-// APIKeyIDLTE applies the LTE predicate on the "api_key_id" field.
-func APIKeyIDLTE(v int64) predicate.ImageJob {
-	return predicate.ImageJob(sql.FieldLTE(FieldAPIKeyID, v))
-}
-
 // GroupIDEQ applies the EQ predicate on the "group_id" field.
 func GroupIDEQ(v int64) predicate.ImageJob {
 	return predicate.ImageJob(sql.FieldEQ(FieldGroupID, v))
@@ -468,26 +428,6 @@ func GroupIDIn(vs ...int64) predicate.ImageJob {
 // GroupIDNotIn applies the NotIn predicate on the "group_id" field.
 func GroupIDNotIn(vs ...int64) predicate.ImageJob {
 	return predicate.ImageJob(sql.FieldNotIn(FieldGroupID, vs...))
-}
-
-// GroupIDGT applies the GT predicate on the "group_id" field.
-func GroupIDGT(v int64) predicate.ImageJob {
-	return predicate.ImageJob(sql.FieldGT(FieldGroupID, v))
-}
-
-// GroupIDGTE applies the GTE predicate on the "group_id" field.
-func GroupIDGTE(v int64) predicate.ImageJob {
-	return predicate.ImageJob(sql.FieldGTE(FieldGroupID, v))
-}
-
-// GroupIDLT applies the LT predicate on the "group_id" field.
-func GroupIDLT(v int64) predicate.ImageJob {
-	return predicate.ImageJob(sql.FieldLT(FieldGroupID, v))
-}
-
-// GroupIDLTE applies the LTE predicate on the "group_id" field.
-func GroupIDLTE(v int64) predicate.ImageJob {
-	return predicate.ImageJob(sql.FieldLTE(FieldGroupID, v))
 }
 
 // EndpointEQ applies the EQ predicate on the "endpoint" field.
@@ -2108,6 +2048,75 @@ func ExpiresAtLT(v time.Time) predicate.ImageJob {
 // ExpiresAtLTE applies the LTE predicate on the "expires_at" field.
 func ExpiresAtLTE(v time.Time) predicate.ImageJob {
 	return predicate.ImageJob(sql.FieldLTE(FieldExpiresAt, v))
+}
+
+// HasUser applies the HasEdge predicate on the "user" edge.
+func HasUser() predicate.ImageJob {
+	return predicate.ImageJob(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, UserTable, UserColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasUserWith applies the HasEdge predicate on the "user" edge with a given conditions (other predicates).
+func HasUserWith(preds ...predicate.User) predicate.ImageJob {
+	return predicate.ImageJob(func(s *sql.Selector) {
+		step := newUserStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasAPIKey applies the HasEdge predicate on the "api_key" edge.
+func HasAPIKey() predicate.ImageJob {
+	return predicate.ImageJob(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, APIKeyTable, APIKeyColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasAPIKeyWith applies the HasEdge predicate on the "api_key" edge with a given conditions (other predicates).
+func HasAPIKeyWith(preds ...predicate.APIKey) predicate.ImageJob {
+	return predicate.ImageJob(func(s *sql.Selector) {
+		step := newAPIKeyStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasGroup applies the HasEdge predicate on the "group" edge.
+func HasGroup() predicate.ImageJob {
+	return predicate.ImageJob(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, GroupTable, GroupColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasGroupWith applies the HasEdge predicate on the "group" edge with a given conditions (other predicates).
+func HasGroupWith(preds ...predicate.Group) predicate.ImageJob {
+	return predicate.ImageJob(func(s *sql.Selector) {
+		step := newGroupStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // HasInputs applies the HasEdge predicate on the "inputs" edge.

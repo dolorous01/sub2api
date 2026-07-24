@@ -12,9 +12,12 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/imagejob"
 	"github.com/Wei-Shaw/sub2api/ent/imagejobinput"
 	"github.com/Wei-Shaw/sub2api/ent/imagejobresult"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
 // ImageJobCreate is the builder for creating a ImageJob entity.
@@ -417,6 +420,21 @@ func (_c *ImageJobCreate) SetExpiresAt(v time.Time) *ImageJobCreate {
 	return _c
 }
 
+// SetUser sets the "user" edge to the User entity.
+func (_c *ImageJobCreate) SetUser(v *User) *ImageJobCreate {
+	return _c.SetUserID(v.ID)
+}
+
+// SetAPIKey sets the "api_key" edge to the APIKey entity.
+func (_c *ImageJobCreate) SetAPIKey(v *APIKey) *ImageJobCreate {
+	return _c.SetAPIKeyID(v.ID)
+}
+
+// SetGroup sets the "group" edge to the Group entity.
+func (_c *ImageJobCreate) SetGroup(v *Group) *ImageJobCreate {
+	return _c.SetGroupID(v.ID)
+}
+
 // AddInputIDs adds the "inputs" edge to the ImageJobInput entity by IDs.
 func (_c *ImageJobCreate) AddInputIDs(ids ...int64) *ImageJobCreate {
 	_c.mutation.AddInputIDs(ids...)
@@ -675,6 +693,15 @@ func (_c *ImageJobCreate) check() error {
 	if _, ok := _c.mutation.ExpiresAt(); !ok {
 		return &ValidationError{Name: "expires_at", err: errors.New(`ent: missing required field "ImageJob.expires_at"`)}
 	}
+	if len(_c.mutation.UserIDs()) == 0 {
+		return &ValidationError{Name: "user", err: errors.New(`ent: missing required edge "ImageJob.user"`)}
+	}
+	if len(_c.mutation.APIKeyIDs()) == 0 {
+		return &ValidationError{Name: "api_key", err: errors.New(`ent: missing required edge "ImageJob.api_key"`)}
+	}
+	if len(_c.mutation.GroupIDs()) == 0 {
+		return &ValidationError{Name: "group", err: errors.New(`ent: missing required edge "ImageJob.group"`)}
+	}
 	return nil
 }
 
@@ -713,18 +740,6 @@ func (_c *ImageJobCreate) createSpec() (*ImageJob, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.PublicID(); ok {
 		_spec.SetField(imagejob.FieldPublicID, field.TypeString, value)
 		_node.PublicID = value
-	}
-	if value, ok := _c.mutation.UserID(); ok {
-		_spec.SetField(imagejob.FieldUserID, field.TypeInt64, value)
-		_node.UserID = value
-	}
-	if value, ok := _c.mutation.APIKeyID(); ok {
-		_spec.SetField(imagejob.FieldAPIKeyID, field.TypeInt64, value)
-		_node.APIKeyID = value
-	}
-	if value, ok := _c.mutation.GroupID(); ok {
-		_spec.SetField(imagejob.FieldGroupID, field.TypeInt64, value)
-		_node.GroupID = value
 	}
 	if value, ok := _c.mutation.Endpoint(); ok {
 		_spec.SetField(imagejob.FieldEndpoint, field.TypeString, value)
@@ -846,6 +861,57 @@ func (_c *ImageJobCreate) createSpec() (*ImageJob, *sqlgraph.CreateSpec) {
 		_spec.SetField(imagejob.FieldExpiresAt, field.TypeTime, value)
 		_node.ExpiresAt = value
 	}
+	if nodes := _c.mutation.UserIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.UserTable,
+			Columns: []string{imagejob.UserColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.UserID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.APIKeyIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.APIKeyTable,
+			Columns: []string{imagejob.APIKeyColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(apikey.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.APIKeyID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.GroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   imagejob.GroupTable,
+			Columns: []string{imagejob.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.GroupID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	if nodes := _c.mutation.InputsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -966,12 +1032,6 @@ func (u *ImageJobUpsert) UpdateUserID() *ImageJobUpsert {
 	return u
 }
 
-// AddUserID adds v to the "user_id" field.
-func (u *ImageJobUpsert) AddUserID(v int64) *ImageJobUpsert {
-	u.Add(imagejob.FieldUserID, v)
-	return u
-}
-
 // SetAPIKeyID sets the "api_key_id" field.
 func (u *ImageJobUpsert) SetAPIKeyID(v int64) *ImageJobUpsert {
 	u.Set(imagejob.FieldAPIKeyID, v)
@@ -984,12 +1044,6 @@ func (u *ImageJobUpsert) UpdateAPIKeyID() *ImageJobUpsert {
 	return u
 }
 
-// AddAPIKeyID adds v to the "api_key_id" field.
-func (u *ImageJobUpsert) AddAPIKeyID(v int64) *ImageJobUpsert {
-	u.Add(imagejob.FieldAPIKeyID, v)
-	return u
-}
-
 // SetGroupID sets the "group_id" field.
 func (u *ImageJobUpsert) SetGroupID(v int64) *ImageJobUpsert {
 	u.Set(imagejob.FieldGroupID, v)
@@ -999,12 +1053,6 @@ func (u *ImageJobUpsert) SetGroupID(v int64) *ImageJobUpsert {
 // UpdateGroupID sets the "group_id" field to the value that was provided on create.
 func (u *ImageJobUpsert) UpdateGroupID() *ImageJobUpsert {
 	u.SetExcluded(imagejob.FieldGroupID)
-	return u
-}
-
-// AddGroupID adds v to the "group_id" field.
-func (u *ImageJobUpsert) AddGroupID(v int64) *ImageJobUpsert {
-	u.Add(imagejob.FieldGroupID, v)
 	return u
 }
 
@@ -1556,13 +1604,6 @@ func (u *ImageJobUpsertOne) SetUserID(v int64) *ImageJobUpsertOne {
 	})
 }
 
-// AddUserID adds v to the "user_id" field.
-func (u *ImageJobUpsertOne) AddUserID(v int64) *ImageJobUpsertOne {
-	return u.Update(func(s *ImageJobUpsert) {
-		s.AddUserID(v)
-	})
-}
-
 // UpdateUserID sets the "user_id" field to the value that was provided on create.
 func (u *ImageJobUpsertOne) UpdateUserID() *ImageJobUpsertOne {
 	return u.Update(func(s *ImageJobUpsert) {
@@ -1577,13 +1618,6 @@ func (u *ImageJobUpsertOne) SetAPIKeyID(v int64) *ImageJobUpsertOne {
 	})
 }
 
-// AddAPIKeyID adds v to the "api_key_id" field.
-func (u *ImageJobUpsertOne) AddAPIKeyID(v int64) *ImageJobUpsertOne {
-	return u.Update(func(s *ImageJobUpsert) {
-		s.AddAPIKeyID(v)
-	})
-}
-
 // UpdateAPIKeyID sets the "api_key_id" field to the value that was provided on create.
 func (u *ImageJobUpsertOne) UpdateAPIKeyID() *ImageJobUpsertOne {
 	return u.Update(func(s *ImageJobUpsert) {
@@ -1595,13 +1629,6 @@ func (u *ImageJobUpsertOne) UpdateAPIKeyID() *ImageJobUpsertOne {
 func (u *ImageJobUpsertOne) SetGroupID(v int64) *ImageJobUpsertOne {
 	return u.Update(func(s *ImageJobUpsert) {
 		s.SetGroupID(v)
-	})
-}
-
-// AddGroupID adds v to the "group_id" field.
-func (u *ImageJobUpsertOne) AddGroupID(v int64) *ImageJobUpsertOne {
-	return u.Update(func(s *ImageJobUpsert) {
-		s.AddGroupID(v)
 	})
 }
 
@@ -2404,13 +2431,6 @@ func (u *ImageJobUpsertBulk) SetUserID(v int64) *ImageJobUpsertBulk {
 	})
 }
 
-// AddUserID adds v to the "user_id" field.
-func (u *ImageJobUpsertBulk) AddUserID(v int64) *ImageJobUpsertBulk {
-	return u.Update(func(s *ImageJobUpsert) {
-		s.AddUserID(v)
-	})
-}
-
 // UpdateUserID sets the "user_id" field to the value that was provided on create.
 func (u *ImageJobUpsertBulk) UpdateUserID() *ImageJobUpsertBulk {
 	return u.Update(func(s *ImageJobUpsert) {
@@ -2425,13 +2445,6 @@ func (u *ImageJobUpsertBulk) SetAPIKeyID(v int64) *ImageJobUpsertBulk {
 	})
 }
 
-// AddAPIKeyID adds v to the "api_key_id" field.
-func (u *ImageJobUpsertBulk) AddAPIKeyID(v int64) *ImageJobUpsertBulk {
-	return u.Update(func(s *ImageJobUpsert) {
-		s.AddAPIKeyID(v)
-	})
-}
-
 // UpdateAPIKeyID sets the "api_key_id" field to the value that was provided on create.
 func (u *ImageJobUpsertBulk) UpdateAPIKeyID() *ImageJobUpsertBulk {
 	return u.Update(func(s *ImageJobUpsert) {
@@ -2443,13 +2456,6 @@ func (u *ImageJobUpsertBulk) UpdateAPIKeyID() *ImageJobUpsertBulk {
 func (u *ImageJobUpsertBulk) SetGroupID(v int64) *ImageJobUpsertBulk {
 	return u.Update(func(s *ImageJobUpsert) {
 		s.SetGroupID(v)
-	})
-}
-
-// AddGroupID adds v to the "group_id" field.
-func (u *ImageJobUpsertBulk) AddGroupID(v int64) *ImageJobUpsertBulk {
-	return u.Update(func(s *ImageJobUpsert) {
-		s.AddGroupID(v)
 	})
 }
 

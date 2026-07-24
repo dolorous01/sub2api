@@ -816,9 +816,6 @@ var (
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "public_id", Type: field.TypeString, Unique: true, Size: 64},
-		{Name: "user_id", Type: field.TypeInt64},
-		{Name: "api_key_id", Type: field.TypeInt64},
-		{Name: "group_id", Type: field.TypeInt64},
 		{Name: "endpoint", Type: field.TypeString, Size: 64},
 		{Name: "operation", Type: field.TypeString, Size: 32},
 		{Name: "mode", Type: field.TypeString, Size: 32},
@@ -849,17 +846,40 @@ var (
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},
 		{Name: "finished_at", Type: field.TypeTime, Nullable: true},
 		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "api_key_id", Type: field.TypeInt64},
+		{Name: "group_id", Type: field.TypeInt64},
 	}
 	// ImageJobsTable holds the schema information for the "image_jobs" table.
 	ImageJobsTable = &schema.Table{
 		Name:       "image_jobs",
 		Columns:    ImageJobsColumns,
 		PrimaryKey: []*schema.Column{ImageJobsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "image_jobs_users_user",
+				Columns:    []*schema.Column{ImageJobsColumns[34]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "image_jobs_api_keys_api_key",
+				Columns:    []*schema.Column{ImageJobsColumns[35]},
+				RefColumns: []*schema.Column{APIKeysColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+			{
+				Symbol:     "image_jobs_groups_group",
+				Columns:    []*schema.Column{ImageJobsColumns[36]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.Restrict,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "idx_image_jobs_api_key_idempotency",
 				Unique:  true,
-				Columns: []*schema.Column{ImageJobsColumns[5], ImageJobsColumns[17]},
+				Columns: []*schema.Column{ImageJobsColumns[35], ImageJobsColumns[14]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "idempotency_key_hash IS NOT NULL",
 				},
@@ -867,7 +887,7 @@ var (
 			{
 				Name:    "idx_image_jobs_claim",
 				Unique:  false,
-				Columns: []*schema.Column{ImageJobsColumns[12], ImageJobsColumns[1], ImageJobsColumns[0]},
+				Columns: []*schema.Column{ImageJobsColumns[9], ImageJobsColumns[1], ImageJobsColumns[0]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "status IN ('queued','running')",
 				},
@@ -2029,6 +2049,9 @@ func init() {
 	IdentityAdoptionDecisionsTable.Annotation = &entsql.Annotation{
 		Table: "identity_adoption_decisions",
 	}
+	ImageJobsTable.ForeignKeys[0].RefTable = UsersTable
+	ImageJobsTable.ForeignKeys[1].RefTable = APIKeysTable
+	ImageJobsTable.ForeignKeys[2].RefTable = GroupsTable
 	ImageJobsTable.Annotation = &entsql.Annotation{
 		Table: "image_jobs",
 	}

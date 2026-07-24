@@ -72,6 +72,21 @@ func (ImageJob) Fields() []ent.Field {
 
 func (ImageJob) Edges() []ent.Edge {
 	return []ent.Edge{
+		edge.To("user", User.Type).
+			Field("user_id").
+			Unique().
+			Required().
+			Annotations(entsql.OnDelete(entsql.Restrict)),
+		edge.To("api_key", APIKey.Type).
+			Field("api_key_id").
+			Unique().
+			Required().
+			Annotations(entsql.OnDelete(entsql.Restrict)),
+		edge.To("group", Group.Type).
+			Field("group_id").
+			Unique().
+			Required().
+			Annotations(entsql.OnDelete(entsql.Restrict)),
 		edge.To("inputs", ImageJobInput.Type).
 			Annotations(entsql.OnDelete(entsql.Cascade)),
 		edge.To("results", ImageJobResult.Type).

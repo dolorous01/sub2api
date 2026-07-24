@@ -20671,12 +20671,6 @@ type ImageJobMutation struct {
 	created_at                     *time.Time
 	updated_at                     *time.Time
 	public_id                      *string
-	user_id                        *int64
-	adduser_id                     *int64
-	api_key_id                     *int64
-	addapi_key_id                  *int64
-	group_id                       *int64
-	addgroup_id                    *int64
 	endpoint                       *string
 	operation                      *string
 	mode                           *string
@@ -20715,6 +20709,12 @@ type ImageJobMutation struct {
 	finished_at                    *time.Time
 	expires_at                     *time.Time
 	clearedFields                  map[string]struct{}
+	user                           *int64
+	cleareduser                    bool
+	api_key                        *int64
+	clearedapi_key                 bool
+	group                          *int64
+	clearedgroup                   bool
 	inputs                         map[int64]struct{}
 	removedinputs                  map[int64]struct{}
 	clearedinputs                  bool
@@ -20934,13 +20934,12 @@ func (m *ImageJobMutation) ResetPublicID() {
 
 // SetUserID sets the "user_id" field.
 func (m *ImageJobMutation) SetUserID(i int64) {
-	m.user_id = &i
-	m.adduser_id = nil
+	m.user = &i
 }
 
 // UserID returns the value of the "user_id" field in the mutation.
 func (m *ImageJobMutation) UserID() (r int64, exists bool) {
-	v := m.user_id
+	v := m.user
 	if v == nil {
 		return
 	}
@@ -20964,39 +20963,19 @@ func (m *ImageJobMutation) OldUserID(ctx context.Context) (v int64, err error) {
 	return oldValue.UserID, nil
 }
 
-// AddUserID adds i to the "user_id" field.
-func (m *ImageJobMutation) AddUserID(i int64) {
-	if m.adduser_id != nil {
-		*m.adduser_id += i
-	} else {
-		m.adduser_id = &i
-	}
-}
-
-// AddedUserID returns the value that was added to the "user_id" field in this mutation.
-func (m *ImageJobMutation) AddedUserID() (r int64, exists bool) {
-	v := m.adduser_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
 // ResetUserID resets all changes to the "user_id" field.
 func (m *ImageJobMutation) ResetUserID() {
-	m.user_id = nil
-	m.adduser_id = nil
+	m.user = nil
 }
 
 // SetAPIKeyID sets the "api_key_id" field.
 func (m *ImageJobMutation) SetAPIKeyID(i int64) {
-	m.api_key_id = &i
-	m.addapi_key_id = nil
+	m.api_key = &i
 }
 
 // APIKeyID returns the value of the "api_key_id" field in the mutation.
 func (m *ImageJobMutation) APIKeyID() (r int64, exists bool) {
-	v := m.api_key_id
+	v := m.api_key
 	if v == nil {
 		return
 	}
@@ -21020,39 +20999,19 @@ func (m *ImageJobMutation) OldAPIKeyID(ctx context.Context) (v int64, err error)
 	return oldValue.APIKeyID, nil
 }
 
-// AddAPIKeyID adds i to the "api_key_id" field.
-func (m *ImageJobMutation) AddAPIKeyID(i int64) {
-	if m.addapi_key_id != nil {
-		*m.addapi_key_id += i
-	} else {
-		m.addapi_key_id = &i
-	}
-}
-
-// AddedAPIKeyID returns the value that was added to the "api_key_id" field in this mutation.
-func (m *ImageJobMutation) AddedAPIKeyID() (r int64, exists bool) {
-	v := m.addapi_key_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
 // ResetAPIKeyID resets all changes to the "api_key_id" field.
 func (m *ImageJobMutation) ResetAPIKeyID() {
-	m.api_key_id = nil
-	m.addapi_key_id = nil
+	m.api_key = nil
 }
 
 // SetGroupID sets the "group_id" field.
 func (m *ImageJobMutation) SetGroupID(i int64) {
-	m.group_id = &i
-	m.addgroup_id = nil
+	m.group = &i
 }
 
 // GroupID returns the value of the "group_id" field in the mutation.
 func (m *ImageJobMutation) GroupID() (r int64, exists bool) {
-	v := m.group_id
+	v := m.group
 	if v == nil {
 		return
 	}
@@ -21076,28 +21035,9 @@ func (m *ImageJobMutation) OldGroupID(ctx context.Context) (v int64, err error) 
 	return oldValue.GroupID, nil
 }
 
-// AddGroupID adds i to the "group_id" field.
-func (m *ImageJobMutation) AddGroupID(i int64) {
-	if m.addgroup_id != nil {
-		*m.addgroup_id += i
-	} else {
-		m.addgroup_id = &i
-	}
-}
-
-// AddedGroupID returns the value that was added to the "group_id" field in this mutation.
-func (m *ImageJobMutation) AddedGroupID() (r int64, exists bool) {
-	v := m.addgroup_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
 // ResetGroupID resets all changes to the "group_id" field.
 func (m *ImageJobMutation) ResetGroupID() {
-	m.group_id = nil
-	m.addgroup_id = nil
+	m.group = nil
 }
 
 // SetEndpoint sets the "endpoint" field.
@@ -22481,6 +22421,87 @@ func (m *ImageJobMutation) ResetExpiresAt() {
 	m.expires_at = nil
 }
 
+// ClearUser clears the "user" edge to the User entity.
+func (m *ImageJobMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[imagejob.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *ImageJobMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *ImageJobMutation) UserIDs() (ids []int64) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *ImageJobMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// ClearAPIKey clears the "api_key" edge to the APIKey entity.
+func (m *ImageJobMutation) ClearAPIKey() {
+	m.clearedapi_key = true
+	m.clearedFields[imagejob.FieldAPIKeyID] = struct{}{}
+}
+
+// APIKeyCleared reports if the "api_key" edge to the APIKey entity was cleared.
+func (m *ImageJobMutation) APIKeyCleared() bool {
+	return m.clearedapi_key
+}
+
+// APIKeyIDs returns the "api_key" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// APIKeyID instead. It exists only for internal usage by the builders.
+func (m *ImageJobMutation) APIKeyIDs() (ids []int64) {
+	if id := m.api_key; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetAPIKey resets all changes to the "api_key" edge.
+func (m *ImageJobMutation) ResetAPIKey() {
+	m.api_key = nil
+	m.clearedapi_key = false
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (m *ImageJobMutation) ClearGroup() {
+	m.clearedgroup = true
+	m.clearedFields[imagejob.FieldGroupID] = struct{}{}
+}
+
+// GroupCleared reports if the "group" edge to the Group entity was cleared.
+func (m *ImageJobMutation) GroupCleared() bool {
+	return m.clearedgroup
+}
+
+// GroupIDs returns the "group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GroupID instead. It exists only for internal usage by the builders.
+func (m *ImageJobMutation) GroupIDs() (ids []int64) {
+	if id := m.group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGroup resets all changes to the "group" edge.
+func (m *ImageJobMutation) ResetGroup() {
+	m.group = nil
+	m.clearedgroup = false
+}
+
 // AddInputIDs adds the "inputs" edge to the ImageJobInput entity by ids.
 func (m *ImageJobMutation) AddInputIDs(ids ...int64) {
 	if m.inputs == nil {
@@ -22633,13 +22654,13 @@ func (m *ImageJobMutation) Fields() []string {
 	if m.public_id != nil {
 		fields = append(fields, imagejob.FieldPublicID)
 	}
-	if m.user_id != nil {
+	if m.user != nil {
 		fields = append(fields, imagejob.FieldUserID)
 	}
-	if m.api_key_id != nil {
+	if m.api_key != nil {
 		fields = append(fields, imagejob.FieldAPIKeyID)
 	}
-	if m.group_id != nil {
+	if m.group != nil {
 		fields = append(fields, imagejob.FieldGroupID)
 	}
 	if m.endpoint != nil {
@@ -23162,15 +23183,6 @@ func (m *ImageJobMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ImageJobMutation) AddedFields() []string {
 	var fields []string
-	if m.adduser_id != nil {
-		fields = append(fields, imagejob.FieldUserID)
-	}
-	if m.addapi_key_id != nil {
-		fields = append(fields, imagejob.FieldAPIKeyID)
-	}
-	if m.addgroup_id != nil {
-		fields = append(fields, imagejob.FieldGroupID)
-	}
 	if m.addrequested_count != nil {
 		fields = append(fields, imagejob.FieldRequestedCount)
 	}
@@ -23194,12 +23206,6 @@ func (m *ImageJobMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ImageJobMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
-	case imagejob.FieldUserID:
-		return m.AddedUserID()
-	case imagejob.FieldAPIKeyID:
-		return m.AddedAPIKeyID()
-	case imagejob.FieldGroupID:
-		return m.AddedGroupID()
 	case imagejob.FieldRequestedCount:
 		return m.AddedRequestedCount()
 	case imagejob.FieldCompletedCount:
@@ -23219,27 +23225,6 @@ func (m *ImageJobMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ImageJobMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case imagejob.FieldUserID:
-		v, ok := value.(int64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddUserID(v)
-		return nil
-	case imagejob.FieldAPIKeyID:
-		v, ok := value.(int64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddAPIKeyID(v)
-		return nil
-	case imagejob.FieldGroupID:
-		v, ok := value.(int64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddGroupID(v)
-		return nil
 	case imagejob.FieldRequestedCount:
 		v, ok := value.(int)
 		if !ok {
@@ -23497,7 +23482,16 @@ func (m *ImageJobMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ImageJobMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 5)
+	if m.user != nil {
+		edges = append(edges, imagejob.EdgeUser)
+	}
+	if m.api_key != nil {
+		edges = append(edges, imagejob.EdgeAPIKey)
+	}
+	if m.group != nil {
+		edges = append(edges, imagejob.EdgeGroup)
+	}
 	if m.inputs != nil {
 		edges = append(edges, imagejob.EdgeInputs)
 	}
@@ -23511,6 +23505,18 @@ func (m *ImageJobMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *ImageJobMutation) AddedIDs(name string) []ent.Value {
 	switch name {
+	case imagejob.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	case imagejob.EdgeAPIKey:
+		if id := m.api_key; id != nil {
+			return []ent.Value{*id}
+		}
+	case imagejob.EdgeGroup:
+		if id := m.group; id != nil {
+			return []ent.Value{*id}
+		}
 	case imagejob.EdgeInputs:
 		ids := make([]ent.Value, 0, len(m.inputs))
 		for id := range m.inputs {
@@ -23529,7 +23535,7 @@ func (m *ImageJobMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ImageJobMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 5)
 	if m.removedinputs != nil {
 		edges = append(edges, imagejob.EdgeInputs)
 	}
@@ -23561,7 +23567,16 @@ func (m *ImageJobMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ImageJobMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 5)
+	if m.cleareduser {
+		edges = append(edges, imagejob.EdgeUser)
+	}
+	if m.clearedapi_key {
+		edges = append(edges, imagejob.EdgeAPIKey)
+	}
+	if m.clearedgroup {
+		edges = append(edges, imagejob.EdgeGroup)
+	}
 	if m.clearedinputs {
 		edges = append(edges, imagejob.EdgeInputs)
 	}
@@ -23575,6 +23590,12 @@ func (m *ImageJobMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *ImageJobMutation) EdgeCleared(name string) bool {
 	switch name {
+	case imagejob.EdgeUser:
+		return m.cleareduser
+	case imagejob.EdgeAPIKey:
+		return m.clearedapi_key
+	case imagejob.EdgeGroup:
+		return m.clearedgroup
 	case imagejob.EdgeInputs:
 		return m.clearedinputs
 	case imagejob.EdgeResults:
@@ -23587,6 +23608,15 @@ func (m *ImageJobMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *ImageJobMutation) ClearEdge(name string) error {
 	switch name {
+	case imagejob.EdgeUser:
+		m.ClearUser()
+		return nil
+	case imagejob.EdgeAPIKey:
+		m.ClearAPIKey()
+		return nil
+	case imagejob.EdgeGroup:
+		m.ClearGroup()
+		return nil
 	}
 	return fmt.Errorf("unknown ImageJob unique edge %s", name)
 }
@@ -23595,6 +23625,15 @@ func (m *ImageJobMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *ImageJobMutation) ResetEdge(name string) error {
 	switch name {
+	case imagejob.EdgeUser:
+		m.ResetUser()
+		return nil
+	case imagejob.EdgeAPIKey:
+		m.ResetAPIKey()
+		return nil
+	case imagejob.EdgeGroup:
+		m.ResetGroup()
+		return nil
 	case imagejob.EdgeInputs:
 		m.ResetInputs()
 		return nil

@@ -10,7 +10,10 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/imagejob"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 )
 
 // ImageJob is the model entity for the ImageJob schema.
@@ -98,19 +101,58 @@ type ImageJob struct {
 
 // ImageJobEdges holds the relations/edges for other nodes in the graph.
 type ImageJobEdges struct {
+	// User holds the value of the user edge.
+	User *User `json:"user,omitempty"`
+	// APIKey holds the value of the api_key edge.
+	APIKey *APIKey `json:"api_key,omitempty"`
+	// Group holds the value of the group edge.
+	Group *Group `json:"group,omitempty"`
 	// Inputs holds the value of the inputs edge.
 	Inputs []*ImageJobInput `json:"inputs,omitempty"`
 	// Results holds the value of the results edge.
 	Results []*ImageJobResult `json:"results,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [5]bool
+}
+
+// UserOrErr returns the User value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ImageJobEdges) UserOrErr() (*User, error) {
+	if e.User != nil {
+		return e.User, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: user.Label}
+	}
+	return nil, &NotLoadedError{edge: "user"}
+}
+
+// APIKeyOrErr returns the APIKey value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ImageJobEdges) APIKeyOrErr() (*APIKey, error) {
+	if e.APIKey != nil {
+		return e.APIKey, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: apikey.Label}
+	}
+	return nil, &NotLoadedError{edge: "api_key"}
+}
+
+// GroupOrErr returns the Group value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ImageJobEdges) GroupOrErr() (*Group, error) {
+	if e.Group != nil {
+		return e.Group, nil
+	} else if e.loadedTypes[2] {
+		return nil, &NotFoundError{label: group.Label}
+	}
+	return nil, &NotLoadedError{edge: "group"}
 }
 
 // InputsOrErr returns the Inputs value or an error if the edge
 // was not loaded in eager-loading.
 func (e ImageJobEdges) InputsOrErr() ([]*ImageJobInput, error) {
-	if e.loadedTypes[0] {
+	if e.loadedTypes[3] {
 		return e.Inputs, nil
 	}
 	return nil, &NotLoadedError{edge: "inputs"}
@@ -119,7 +161,7 @@ func (e ImageJobEdges) InputsOrErr() ([]*ImageJobInput, error) {
 // ResultsOrErr returns the Results value or an error if the edge
 // was not loaded in eager-loading.
 func (e ImageJobEdges) ResultsOrErr() ([]*ImageJobResult, error) {
-	if e.loadedTypes[1] {
+	if e.loadedTypes[4] {
 		return e.Results, nil
 	}
 	return nil, &NotLoadedError{edge: "results"}
@@ -406,6 +448,21 @@ func (_m *ImageJob) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *ImageJob) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
+}
+
+// QueryUser queries the "user" edge of the ImageJob entity.
+func (_m *ImageJob) QueryUser() *UserQuery {
+	return NewImageJobClient(_m.config).QueryUser(_m)
+}
+
+// QueryAPIKey queries the "api_key" edge of the ImageJob entity.
+func (_m *ImageJob) QueryAPIKey() *APIKeyQuery {
+	return NewImageJobClient(_m.config).QueryAPIKey(_m)
+}
+
+// QueryGroup queries the "group" edge of the ImageJob entity.
+func (_m *ImageJob) QueryGroup() *GroupQuery {
+	return NewImageJobClient(_m.config).QueryGroup(_m)
 }
 
 // QueryInputs queries the "inputs" edge of the ImageJob entity.
