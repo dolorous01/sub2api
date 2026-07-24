@@ -401,6 +401,28 @@ gateway:
     # Max image requests waiting in this process when overflow_mode=wait, 0=unlimited
     # wait 模式当前进程允许排队等待的图片请求数，0=不限制
     max_waiting_requests: 100
+  # Asynchronous image jobs (default disabled)
+  # 异步图片任务（默认关闭）
+  image_jobs:
+    enabled: false
+    worker_concurrency: 2
+    poll_interval_milliseconds: 500
+    heartbeat_interval_seconds: 10
+    task_timeout_seconds: 1800
+    max_outputs_per_job: 4
+    max_input_images: 4
+    result_ttl_seconds: 86400
+    max_reservation_usd: 1.0
+    storage:
+      driver: s3
+      endpoint: ""
+      region: auto
+      bucket: ""
+      prefix: image-jobs/
+      access_key_id: ""
+      secret_access_key: ""
+      force_path_style: false
+      local_directory: ""
   # SSE max line size in bytes (default: 40MB)
   # SSE 单行最大字节数（默认 40MB）
   max_line_size: 41943040
