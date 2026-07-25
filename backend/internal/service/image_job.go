@@ -132,6 +132,19 @@ type ImageJobInputRef struct {
 	FieldName string `json:"field_name,omitempty"`
 }
 
+type ImageJobObject struct {
+	Data        []byte
+	ContentType string
+	Size        int64
+}
+
+type ImageJobObjectStore interface {
+	Put(ctx context.Context, key string, data []byte, contentType string) error
+	Get(ctx context.Context, key string) (*ImageJobObject, error)
+	Delete(ctx context.Context, key string) error
+	Health(ctx context.Context) error
+}
+
 type ImageJobInput struct {
 	ID        int64
 	JobID     int64
