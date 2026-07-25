@@ -195,6 +195,7 @@ type ImageJob struct {
 	ReservationBillingType    int8
 	ReservationSubscriptionID *int64
 	ReservationStatus         string
+	Usage                     json.RawMessage
 	SettlementStatus          string
 	AttemptID                 *string
 	WorkerID                  *string
