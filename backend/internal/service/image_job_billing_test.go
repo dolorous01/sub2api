@@ -49,12 +49,13 @@ func TestImageJobBillingSettlementUsesStableRequestID(t *testing.T) {
 
 func TestImageJobBillingSequenceSettlementUsesFrameIndex(t *testing.T) {
 	gateway := &fakeImageJobBillingGateway{}
-	billing := NewImageJobBilling(gateway, 1, &fakeImageJobReservationRepository{})
+	reservations := &fakeImageJobReservationRepository{}
+	billing := NewImageJobBilling(gateway, 1, reservations)
 	user := &User{ID: 10}
 
 	_, err := billing.Settle(context.Background(), ImageJobSettlementInput{
 		Job: &ImageJob{
-			PublicID: "imgjob_sequence", Mode: "sequence",
+			ID: 42, PublicID: "imgjob_sequence", Mode: "sequence",
 			RequestedModel: "gpt-image-2", RequestDigest: "digest",
 		},
 		FrameIndex: 2,
@@ -71,6 +72,9 @@ func TestImageJobBillingSequenceSettlementUsesFrameIndex(t *testing.T) {
 	}
 	if gateway.billingRequestID != "imgjob_sequence:2" {
 		t.Errorf("billing request ID = %q, want imgjob_sequence:2", gateway.billingRequestID)
+	}
+	if reservations.settled[42] != 0 {
+		t.Errorf("sequence frame settled whole-job reservation %d times, want 0", reservations.settled[42])
 	}
 }
 

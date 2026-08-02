@@ -197,8 +197,10 @@ func (b *ImageJobBilling) Settle(ctx context.Context, input ImageJobSettlementIn
 	if err != nil {
 		return nil, err
 	}
-	if err := b.reservationRepo.SettleReservation(ctx, input.Job.ID); err != nil {
-		return nil, fmt.Errorf("settle image job reservation: %w", err)
+	if input.Job.Mode != "sequence" {
+		if err := b.reservationRepo.SettleReservation(ctx, input.Job.ID); err != nil {
+			return nil, fmt.Errorf("settle image job reservation: %w", err)
+		}
 	}
 	return cost, nil
 }
