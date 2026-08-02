@@ -103,6 +103,8 @@ Sub2API 当前使用 Vue 3 前端和 Go 后端，并已提供 OpenAI 兼容图�
 
 负责 Sub2API 路由、登录和管理员权限门禁、全局侧栏、主题与语言同步，以及 React 画布的挂载和销毁。宿主通过显式 `CanvasHostContext` 向微前端提供能力，不允许 React 代码直接依赖 Vue store。
 
+Vue Host 为画布创建 ShadowRoot，并把 React CSS、Ant Design 动态样式、popup 和 modal 都限制在该 ShadowRoot 内，防止上游 reset 和工具样式污染现有 Vue 页面。ESM 模块和 CSS 只能从同源 `/infinite-canvas/` manifest 加载。
+
 ```ts
 interface CanvasHostContext {
   apiBaseURL: string
@@ -166,6 +168,7 @@ CanvasHandle.unmount()
 
 - 新增 `/admin/images` 路由和管理员左侧“图片生成”菜单项。
 - 页面提供“生成画布”和“模型配置”两个标签。
+- 管理员入口和“模型配置”不受用户功能开关隐藏，确保管理员能在开放用户功能前完成配置；功能关闭时“生成画布”标签不可提交任务。
 - “生成画布”复用同一 React 微前端；项目仍属于当前管理员用户，不是全站共享项目。
 - “模型配置”由原生 Vue 实现，使用有序列表。第一项明确标记为主模型，其余项标记为兜底模型。
 - 管理员可添加、移除、启停和拖拽排序，并在保存前查看最终执行顺序与能力警告。
@@ -248,6 +251,8 @@ attempts = 按所选 API Key 的分组权限和本次操作能力过滤后的 at
 - `created_at`、`deleted_at`。
 
 资产删除先进入逻辑删除和延迟清理。只要仍被项目或未过期任务引用，就不得删除对象。
+
+项目保存时同步维护 `image_canvas_asset_references(project_id, asset_id, node_id)`，不能仅靠扫描 JSONB 猜测引用。对象清理必须确认没有活动项目引用、未过期任务结果引用或派生资产引用后才能删除。
 
 ### 9.3 异步任务扩展
 
@@ -455,7 +460,7 @@ GET /api/v1/admin/image-canvas/model-policy/audit
 
 ### 15.1 数据库迁移
 
-迁移只新增表、索引和可空关联，不重命名或删除现有图片、用量和账号字段。首次部署时 `image_canvas_enabled=false`，模型策略未配置，用户和管理员入口均不可用。
+迁移只新增表、索引和可空关联，不重命名或删除现有图片、用量和账号字段。首次部署时 `image_canvas_enabled=false`，用户入口和用户/管理员画布任务创建不可用；管理员模型配置入口保持可用。
 
 ### 15.2 发布顺序
 
