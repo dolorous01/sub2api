@@ -313,6 +313,65 @@ func TestOpenAIGatewayServiceRecordUsage_ZeroUsageStillWritesUsageLog(t *testing
 	require.Zero(t, billingRepo.lastCmd.AccountQuotaCost)
 }
 
+func TestOpenAIGatewayServiceRecordUsageWithCost_ReturnsAppliedCost(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(
+		usageRepo,
+		billingRepo,
+		&openAIRecordUsageUserRepoStub{},
+		&openAIRecordUsageSubRepoStub{},
+		nil,
+	)
+
+	cost, err := svc.RecordUsageWithCost(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "resp_return_cost",
+			Usage:     OpenAIUsage{InputTokens: 1200, OutputTokens: 300},
+			Model:     "gpt-5.1",
+			Duration:  time.Second,
+		},
+		APIKey:  &APIKey{ID: 1010, Quota: 100, Group: &Group{RateMultiplier: 1}},
+		User:    &User{ID: 2010},
+		Account: &Account{ID: 3010, Type: AccountTypeAPIKey},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, cost)
+	require.Greater(t, cost.ActualCost, 0.0)
+	require.NotNil(t, billingRepo.lastCmd)
+	require.InDelta(t, billingRepo.lastCmd.BalanceCost, cost.ActualCost, 1e-12)
+}
+
+func TestOpenAIGatewayServiceRecordUsageWithCost_BillingRequestIDOverridesContextAndWS(t *testing.T) {
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(
+		&openAIRecordUsageLogRepoStub{inserted: true},
+		billingRepo,
+		&openAIRecordUsageUserRepoStub{},
+		&openAIRecordUsageSubRepoStub{},
+		nil,
+	)
+	ctx := context.WithValue(context.Background(), ctxkey.ClientRequestID, "client-request")
+
+	_, err := svc.RecordUsageWithCost(ctx, &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:    "upstream-request",
+			OpenAIWSMode: true,
+			Usage:        OpenAIUsage{InputTokens: 1},
+			Model:        "gpt-5.1",
+		},
+		APIKey:           &APIKey{ID: 1011, Quota: 100, Group: &Group{RateMultiplier: 1}},
+		User:             &User{ID: 2011},
+		Account:          &Account{ID: 3011, Type: AccountTypeAPIKey},
+		BillingRequestID: "imgjob_stable:0",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, billingRepo.lastCmd)
+	require.Equal(t, "imgjob_stable:0", billingRepo.lastCmd.RequestID)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_MissingPricingRecordsZeroCostUsageLog(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}

@@ -6256,6 +6256,7 @@ type OpenAIRecordUsageInput struct {
 	UpstreamEndpoint   string
 	UserAgent          string // 请求的 User-Agent
 	IPAddress          string // 请求的客户端 IP 地址
+	BillingRequestID   string // Optional stable billing idempotency key for internally replayed work.
 	RequestPayloadHash string
 	APIKeyService      APIKeyQuotaUpdater
 	QuotaPlatform      string // user×platform quota platform resolved by the handler before async billing.
@@ -6327,12 +6328,18 @@ func (s *OpenAIGatewayService) RecordCyberPolicyUsageLog(ctx context.Context, in
 
 // RecordUsage records usage and deducts balance
 func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRecordUsageInput) error {
+	_, err := s.RecordUsageWithCost(ctx, input)
+	return err
+}
+
+// RecordUsageWithCost records usage, deducts balance, and returns the resolved cost.
+func (s *OpenAIGatewayService) RecordUsageWithCost(ctx context.Context, input *OpenAIRecordUsageInput) (*CostBreakdown, error) {
 	if input == nil {
-		return errors.New("openai usage input is nil")
+		return nil, errors.New("openai usage input is nil")
 	}
 	result := input.Result
 	if result == nil {
-		return errors.New("openai usage result is nil")
+		return nil, errors.New("openai usage result is nil")
 	}
 	if s.rateLimitService != nil && input.Account != nil && input.Account.Platform == PlatformOpenAI {
 		s.rateLimitService.ResetOpenAI403Counter(ctx, input.Account.ID)
@@ -6404,7 +6411,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	cost, err = s.calculateOpenAIRecordUsageCost(ctx, result, apiKey, billingModels, multiplier, imageMultiplier, tokens, serviceTier)
 	if err != nil {
 		if !isUsagePricingUnavailableError(err) {
-			return err
+			return nil, err
 		}
 		logger.L().With(
 			zap.String("component", "service.openai_gateway"),
@@ -6428,8 +6435,12 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	// Create usage log
 	durationMs := int(result.Duration.Milliseconds())
 	accountRateMultiplier := account.BillingRateMultiplier()
-	requestID := resolveUsageBillingRequestID(ctx, result.RequestID)
-	if result.OpenAIWSMode {
+	billingRequestID := strings.TrimSpace(input.BillingRequestID)
+	requestID := billingRequestID
+	if requestID == "" {
+		requestID = resolveUsageBillingRequestID(ctx, result.RequestID)
+	}
+	if billingRequestID == "" && result.OpenAIWSMode {
 		if upstreamRequestID := strings.TrimSpace(result.RequestID); upstreamRequestID != "" {
 			requestID = upstreamRequestID
 		}
@@ -6532,7 +6543,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 		logger.LegacyPrintf("service.openai_gateway", "[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
 		s.deferredService.ScheduleLastUsedUpdate(account.ID)
-		return nil
+		return cost, nil
 	}
 
 	// Async usage billing runs outside the original request context, so it
@@ -6559,11 +6570,11 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}()
 
 	if billingErr != nil {
-		return billingErr
+		return nil, billingErr
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 
-	return nil
+	return cost, nil
 }
 
 func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(

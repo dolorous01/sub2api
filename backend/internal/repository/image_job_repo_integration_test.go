@@ -66,6 +66,94 @@ func TestImageJobRepositoryClaimNextOnlyOnce(t *testing.T) {
 	}
 }
 
+func TestImageJobRepositoryCreateReservedRejectsHeldBalanceOvercommit(t *testing.T) {
+	repo, fixture := newImageJobIntegrationRepo(t)
+	if _, err := integrationDB.ExecContext(context.Background(), "UPDATE users SET balance = 1.00 WHERE id = $1", fixture.userID); err != nil {
+		t.Fatalf("set user balance: %v", err)
+	}
+	first := fixture.create("reserve-a", "")
+	first.ReservedUSD = 0.75
+	first.ReservationBillingType = service.BillingTypeBalance
+	created, _, err := repo.CreateReserved(context.Background(), first)
+	if err != nil || !created {
+		t.Fatalf("first CreateReserved() created = %t, error = %v", created, err)
+	}
+	second := fixture.create("reserve-b", "")
+	second.ReservedUSD = 0.50
+	second.ReservationBillingType = service.BillingTypeBalance
+	if _, _, err := repo.CreateReserved(context.Background(), second); !errors.Is(err, service.ErrImageJobReservationInsufficient) {
+		t.Fatalf("second CreateReserved() error = %v, want reservation insufficient", err)
+	}
+}
+
+func TestImageJobRepositoryCreateReservedReplayDoesNotDoubleReserve(t *testing.T) {
+	repo, fixture := newImageJobIntegrationRepo(t)
+	if _, err := integrationDB.ExecContext(context.Background(), "UPDATE users SET balance = 0.75 WHERE id = $1", fixture.userID); err != nil {
+		t.Fatalf("set user balance: %v", err)
+	}
+	first := fixture.create("same-reserve", "same-idempotency")
+	first.ReservedUSD = 0.75
+	first.ReservationBillingType = service.BillingTypeBalance
+	created, _, err := repo.CreateReserved(context.Background(), first)
+	if err != nil || !created {
+		t.Fatalf("first CreateReserved() created = %t, error = %v", created, err)
+	}
+	replay := fixture.create("same-reserve", "same-idempotency")
+	replay.ReservedUSD = 0.75
+	replay.ReservationBillingType = service.BillingTypeBalance
+	created, existing, err := repo.CreateReserved(context.Background(), replay)
+	if err != nil || created || existing == nil {
+		t.Fatalf("replay CreateReserved() = %t, %#v, %v", created, existing, err)
+	}
+}
+
+func TestImageJobRepositoryCreateReservedRejectsHeldAPIKeyQuotaOvercommit(t *testing.T) {
+	repo, fixture := newImageJobIntegrationRepo(t)
+	if _, err := integrationDB.ExecContext(context.Background(),
+		"UPDATE api_keys SET quota = 1.00, quota_used = 0.20 WHERE id = $1", fixture.apiKeyID); err != nil {
+		t.Fatalf("set API key quota: %v", err)
+	}
+	first := fixture.create("quota-reserve-a", "")
+	first.ReservedUSD = 0.50
+	first.ReservationBillingType = service.BillingTypeBalance
+	created, _, err := repo.CreateReserved(context.Background(), first)
+	if err != nil || !created {
+		t.Fatalf("first CreateReserved() created = %t, error = %v", created, err)
+	}
+	second := fixture.create("quota-reserve-b", "")
+	second.ReservedUSD = 0.40
+	second.ReservationBillingType = service.BillingTypeBalance
+	if _, _, err := repo.CreateReserved(context.Background(), second); !errors.Is(err, service.ErrImageJobReservationInsufficient) {
+		t.Fatalf("second CreateReserved() error = %v, want reservation insufficient", err)
+	}
+}
+
+func TestImageJobRepositoryCreateReservedRejectsHeldSubscriptionOvercommit(t *testing.T) {
+	repo, fixture := newImageJobIntegrationRepo(t)
+	if _, err := integrationDB.ExecContext(context.Background(),
+		"UPDATE groups SET daily_limit_usd = 1.00 WHERE id = $1", fixture.groupID); err != nil {
+		t.Fatalf("set subscription daily limit: %v", err)
+	}
+	subscription := mustCreateSubscription(t, integrationEntClient, &service.UserSubscription{
+		UserID: fixture.userID, GroupID: fixture.groupID, DailyUsageUSD: 0.10,
+	})
+	first := fixture.create("subscription-reserve-a", "")
+	first.ReservedUSD = 0.60
+	first.ReservationBillingType = service.BillingTypeSubscription
+	first.ReservationSubscriptionID = &subscription.ID
+	created, _, err := repo.CreateReserved(context.Background(), first)
+	if err != nil || !created {
+		t.Fatalf("first CreateReserved() created = %t, error = %v", created, err)
+	}
+	second := fixture.create("subscription-reserve-b", "")
+	second.ReservedUSD = 0.40
+	second.ReservationBillingType = service.BillingTypeSubscription
+	second.ReservationSubscriptionID = &subscription.ID
+	if _, _, err := repo.CreateReserved(context.Background(), second); !errors.Is(err, service.ErrImageJobReservationInsufficient) {
+		t.Fatalf("second CreateReserved() error = %v, want reservation insufficient", err)
+	}
+}
+
 type imageJobIntegrationFixture struct {
 	userID   int64
 	apiKeyID int64
@@ -80,6 +168,9 @@ func newImageJobIntegrationRepo(t *testing.T) (service.ImageJobRepository, *imag
 	user := mustCreateUser(t, integrationEntClient, &service.User{Email: fmt.Sprintf("image-job-%d@example.test", stamp)})
 	groupID := group.ID
 	apiKey := mustCreateApiKey(t, integrationEntClient, &service.APIKey{UserID: user.ID, GroupID: &groupID, Key: fmt.Sprintf("sk-image-job-%d", stamp)})
+	if _, err := integrationDB.ExecContext(context.Background(), "UPDATE users SET balance = 100 WHERE id = $1", user.ID); err != nil {
+		t.Fatalf("seed image job user balance: %v", err)
+	}
 	t.Cleanup(func() {
 		_, _ = integrationDB.ExecContext(context.Background(), "DELETE FROM image_jobs WHERE api_key_id = $1", apiKey.ID)
 	})

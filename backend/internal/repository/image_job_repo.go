@@ -44,16 +44,14 @@ func (r *imageJobRepository) CreateReserved(ctx context.Context, create *service
 	if err != nil {
 		return false, nil, fmt.Errorf("marshal image job request: %w", err)
 	}
-	billingType := create.ReservationBillingType
-	if billingType == 0 {
-		billingType = 1
-	}
-
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return false, nil, fmt.Errorf("begin image job create: %w", err)
 	}
 	defer tx.Rollback()
+	if err := validateImageJobReservation(ctx, tx, create); err != nil {
+		return false, nil, err
+	}
 
 	row := tx.QueryRowContext(ctx, `
 		INSERT INTO image_jobs (
@@ -86,7 +84,7 @@ func (r *imageJobRepository) CreateReserved(ctx context.Context, create *service
 		create.RequestDigest,
 		nullableStringPointer(create.IdempotencyKeyHash),
 		create.ReservedUSD,
-		int(billingType),
+		int(create.ReservationBillingType),
 		nullableInt64Pointer(create.ReservationSubscriptionID),
 		create.ExpiresAt,
 	)
@@ -135,6 +133,121 @@ func (r *imageJobRepository) CreateReserved(ctx context.Context, create *service
 		return false, nil, fmt.Errorf("commit image job create: %w", err)
 	}
 	return true, job, nil
+}
+
+func validateImageJobReservation(ctx context.Context, tx *sql.Tx, create *service.ImageJobCreate) error {
+	if create.ReservedUSD <= 0 {
+		return fmt.Errorf("%w: amount must be greater than zero", service.ErrImageJobReservationUnavailable)
+	}
+	switch create.ReservationBillingType {
+	case service.BillingTypeBalance:
+		var balance float64
+		err := tx.QueryRowContext(ctx, `
+			SELECT balance
+			FROM users
+			WHERE id = $1 AND deleted_at IS NULL
+			FOR UPDATE`, create.UserID).Scan(&balance)
+		if errors.Is(err, sql.ErrNoRows) {
+			return service.ErrImageJobReservationInsufficient
+		}
+		if err != nil {
+			return fmt.Errorf("lock image job reservation balance: %w", err)
+		}
+		var held float64
+		if err := tx.QueryRowContext(ctx, `
+			SELECT COALESCE(SUM(reserved_usd), 0)
+			FROM image_jobs
+			WHERE user_id = $1 AND reservation_billing_type = $2
+				AND reservation_status = 'held'
+				AND ($4::varchar IS NULL OR api_key_id <> $3
+					OR idempotency_key_hash IS DISTINCT FROM $4)`,
+			create.UserID, service.BillingTypeBalance, create.APIKeyID,
+			nullableStringPointer(create.IdempotencyKeyHash),
+		).Scan(&held); err != nil {
+			return fmt.Errorf("sum held image job balance reservations: %w", err)
+		}
+		if balance+1e-9 < held+create.ReservedUSD {
+			return service.ErrImageJobReservationInsufficient
+		}
+	case service.BillingTypeSubscription:
+		if create.ReservationSubscriptionID == nil {
+			return fmt.Errorf("%w: subscription ID is required", service.ErrImageJobReservationUnavailable)
+		}
+		var dailyUsage, weeklyUsage, monthlyUsage float64
+		var dailyLimit, weeklyLimit, monthlyLimit sql.NullFloat64
+		err := tx.QueryRowContext(ctx, `
+			SELECT us.daily_usage_usd, us.weekly_usage_usd, us.monthly_usage_usd,
+				g.daily_limit_usd, g.weekly_limit_usd, g.monthly_limit_usd
+			FROM user_subscriptions us
+			JOIN groups g ON g.id = us.group_id
+			WHERE us.id = $1 AND us.user_id = $2 AND us.group_id = $3
+				AND us.status = $4 AND us.deleted_at IS NULL
+				AND us.expires_at > NOW() AND g.deleted_at IS NULL
+			FOR UPDATE OF us, g`,
+			*create.ReservationSubscriptionID, create.UserID, create.GroupID, service.SubscriptionStatusActive,
+		).Scan(&dailyUsage, &weeklyUsage, &monthlyUsage, &dailyLimit, &weeklyLimit, &monthlyLimit)
+		if errors.Is(err, sql.ErrNoRows) {
+			return service.ErrImageJobReservationInsufficient
+		}
+		if err != nil {
+			return fmt.Errorf("lock image job subscription reservation: %w", err)
+		}
+		var held float64
+		if err := tx.QueryRowContext(ctx, `
+			SELECT COALESCE(SUM(reserved_usd), 0)
+			FROM image_jobs
+			WHERE reservation_subscription_id = $1
+				AND reservation_billing_type = $2
+				AND reservation_status = 'held'
+				AND ($4::varchar IS NULL OR api_key_id <> $3
+					OR idempotency_key_hash IS DISTINCT FROM $4)`,
+			*create.ReservationSubscriptionID, service.BillingTypeSubscription,
+			create.APIKeyID, nullableStringPointer(create.IdempotencyKeyHash),
+		).Scan(&held); err != nil {
+			return fmt.Errorf("sum held image job subscription reservations: %w", err)
+		}
+		requested := held + create.ReservedUSD
+		if exceedsImageJobLimit(dailyUsage, requested, dailyLimit) ||
+			exceedsImageJobLimit(weeklyUsage, requested, weeklyLimit) ||
+			exceedsImageJobLimit(monthlyUsage, requested, monthlyLimit) {
+			return service.ErrImageJobReservationInsufficient
+		}
+	default:
+		return fmt.Errorf("%w: unsupported billing type %d", service.ErrImageJobReservationUnavailable, create.ReservationBillingType)
+	}
+
+	var quota, quotaUsed float64
+	err := tx.QueryRowContext(ctx, `
+		SELECT quota, quota_used
+		FROM api_keys
+		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+		FOR UPDATE`, create.APIKeyID, create.UserID).Scan(&quota, &quotaUsed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return service.ErrImageJobReservationInsufficient
+	}
+	if err != nil {
+		return fmt.Errorf("lock image job API key reservation: %w", err)
+	}
+	if quota > 0 {
+		var held float64
+		if err := tx.QueryRowContext(ctx, `
+			SELECT COALESCE(SUM(reserved_usd), 0)
+			FROM image_jobs
+			WHERE api_key_id = $1 AND reservation_status = 'held'
+				AND ($2::varchar IS NULL OR idempotency_key_hash IS DISTINCT FROM $2)`,
+			create.APIKeyID, nullableStringPointer(create.IdempotencyKeyHash),
+		).Scan(&held); err != nil {
+			return fmt.Errorf("sum held image job API key reservations: %w", err)
+		}
+		if quota+1e-9 < quotaUsed+held+create.ReservedUSD {
+			return service.ErrImageJobReservationInsufficient
+		}
+	}
+	return nil
+}
+
+func exceedsImageJobLimit(usage, requested float64, limit sql.NullFloat64) bool {
+	return limit.Valid && limit.Float64 > 0 && usage+requested > limit.Float64+1e-9
 }
 
 func (r *imageJobRepository) GetOwned(ctx context.Context, publicID string, apiKeyID int64) (*service.ImageJob, error) {
