@@ -109,12 +109,14 @@ interface CanvasHostContext {
   locale: string
   theme: 'light' | 'dark'
   routeMode: 'user' | 'admin'
+  request<T>(method: string, path: string, body?: unknown, headers?: Record<string, string>): Promise<T>
+  stream(path: string, init?: RequestInit): Promise<ReadableStream<Uint8Array>>
   navigate(path: string): void
   notify(level: 'success' | 'warning' | 'error', message: string): void
 }
 ```
 
-认证继续使用 Sub2API 现有同源 API 客户端约定。宿主不得把上游账号密钥、Provider URL 或管理员配置写入 URL、DOM 属性或画布持久化数据。
+认证继续使用 Sub2API 现有同源 API 客户端约定。`request` 和 `stream` 由 Vue 宿主注入并负责附加和刷新登录凭证，React 画布不直接读取或持久化 Sub2API JWT。宿主不得把上游账号密钥、Provider URL 或管理员配置写入 URL、DOM 属性或画布持久化数据。
 
 ### 6.2 React Canvas App
 
