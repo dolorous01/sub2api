@@ -42,13 +42,23 @@ type imageJobBillingGateway interface {
 	RecordUsageWithCost(ctx context.Context, input *OpenAIRecordUsageInput) (*CostBreakdown, error)
 }
 
+type ImageJobReservationRepository interface {
+	SettleReservation(ctx context.Context, jobID int64) error
+	ReleaseReservation(ctx context.Context, jobID int64) error
+}
+
 type ImageJobBilling struct {
 	gateway           imageJobBillingGateway
+	reservationRepo   ImageJobReservationRepository
 	maxReservationUSD float64
 }
 
-func NewImageJobBilling(gateway imageJobBillingGateway, maxReservationUSD float64) *ImageJobBilling {
-	return &ImageJobBilling{gateway: gateway, maxReservationUSD: maxReservationUSD}
+func NewImageJobBilling(gateway imageJobBillingGateway, maxReservationUSD float64, reservationRepos ...ImageJobReservationRepository) *ImageJobBilling {
+	var reservationRepo ImageJobReservationRepository
+	if len(reservationRepos) > 0 {
+		reservationRepo = reservationRepos[0]
+	}
+	return &ImageJobBilling{gateway: gateway, reservationRepo: reservationRepo, maxReservationUSD: maxReservationUSD}
 }
 
 func (b *ImageJobBilling) Estimate(ctx context.Context, apiKey *APIKey, subscription *UserSubscription, req ImageJobRequest) (ImageJobReservation, error) {
@@ -100,7 +110,13 @@ func (b *ImageJobBilling) Settle(ctx context.Context, input ImageJobSettlementIn
 	if input.Job == nil || strings.TrimSpace(input.Job.PublicID) == "" {
 		return nil, fmt.Errorf("image job is required for settlement")
 	}
+	if b.reservationRepo == nil {
+		return nil, fmt.Errorf("image job reservation repository is unavailable")
+	}
 	if input.PersistedResultCount <= 0 {
+		if err := b.reservationRepo.ReleaseReservation(ctx, input.Job.ID); err != nil {
+			return nil, fmt.Errorf("release image job reservation: %w", err)
+		}
 		return &CostBreakdown{}, nil
 	}
 	if input.Execution == nil || input.Execution.Forward == nil || input.Execution.Account == nil {
@@ -109,12 +125,30 @@ func (b *ImageJobBilling) Settle(ctx context.Context, input ImageJobSettlementIn
 	if input.APIKey == nil {
 		return nil, fmt.Errorf("API key is required for image settlement")
 	}
+	if input.Job.APIKeyID > 0 && input.APIKey.ID != input.Job.APIKeyID {
+		return nil, fmt.Errorf("API key does not match image job reservation")
+	}
 	user := input.User
 	if user == nil {
 		user = input.APIKey.User
 	}
 	if user == nil {
 		return nil, fmt.Errorf("user is required for image settlement")
+	}
+	if input.Job.UserID > 0 && user.ID != input.Job.UserID {
+		return nil, fmt.Errorf("user does not match image job reservation")
+	}
+	billingType := input.Job.ReservationBillingType
+	var subscription *UserSubscription
+	switch billingType {
+	case BillingTypeBalance:
+	case BillingTypeSubscription:
+		if input.Job.ReservationSubscriptionID == nil || *input.Job.ReservationSubscriptionID <= 0 {
+			return nil, fmt.Errorf("persisted image job subscription is required for settlement")
+		}
+		subscription = &UserSubscription{ID: *input.Job.ReservationSubscriptionID}
+	default:
+		return nil, fmt.Errorf("unsupported persisted image job billing type %d", billingType)
 	}
 
 	settlementIndex := input.FrameIndex
@@ -123,26 +157,35 @@ func (b *ImageJobBilling) Settle(ctx context.Context, input ImageJobSettlementIn
 	}
 	requestID := fmt.Sprintf("%s:%d", input.Job.PublicID, settlementIndex)
 	forward := *input.Execution.Forward
+	resultCount := forward.ImageCount
+	if resultCount <= 0 {
+		resultCount = input.Job.RequestedCount
+	}
+	if input.Job.Mode != "sequence" && resultCount > input.PersistedResultCount {
+		forward.Usage = scaleImageJobUsage(forward.Usage, input.PersistedResultCount, resultCount)
+	}
 	forward.RequestID = requestID
 	forward.ImageCount = input.PersistedResultCount
 	if strings.TrimSpace(forward.Model) == "" {
 		forward.Model = input.Job.RequestedModel
 	}
 	usageInput := &OpenAIRecordUsageInput{
-		Result:             &forward,
-		APIKey:             input.APIKey,
-		User:               user,
-		Account:            input.Execution.Account,
-		Subscription:       input.Subscription,
-		InboundEndpoint:    firstNonEmptyString(input.InboundEndpoint, input.Job.Endpoint),
-		UpstreamEndpoint:   input.UpstreamEndpoint,
-		UserAgent:          input.UserAgent,
-		IPAddress:          input.IPAddress,
-		BillingRequestID:   requestID,
-		RequestPayloadHash: fmt.Sprintf("%s:%d", input.Job.RequestDigest, settlementIndex),
-		APIKeyService:      input.APIKeyService,
-		QuotaPlatform:      input.QuotaPlatform,
-		ChannelUsageFields: input.ChannelUsageFields,
+		Result:                &forward,
+		APIKey:                input.APIKey,
+		User:                  user,
+		Account:               input.Execution.Account,
+		Subscription:          subscription,
+		InboundEndpoint:       firstNonEmptyString(input.InboundEndpoint, input.Job.Endpoint),
+		UpstreamEndpoint:      input.UpstreamEndpoint,
+		UserAgent:             input.UserAgent,
+		IPAddress:             input.IPAddress,
+		BillingRequestID:      requestID,
+		BillingType:           &billingType,
+		BillingSubscriptionID: input.Job.ReservationSubscriptionID,
+		RequestPayloadHash:    fmt.Sprintf("%s:%d", input.Job.RequestDigest, settlementIndex),
+		APIKeyService:         input.APIKeyService,
+		QuotaPlatform:         input.QuotaPlatform,
+		ChannelUsageFields:    input.ChannelUsageFields,
 	}
 	if usageInput.OriginalModel == "" {
 		usageInput.OriginalModel = input.Job.RequestedModel
@@ -150,7 +193,30 @@ func (b *ImageJobBilling) Settle(ctx context.Context, input ImageJobSettlementIn
 	if usageInput.ChannelMappedModel == "" {
 		usageInput.ChannelMappedModel = input.Job.MappedModel
 	}
-	return b.gateway.RecordUsageWithCost(ctx, usageInput)
+	cost, err := b.gateway.RecordUsageWithCost(ctx, usageInput)
+	if err != nil {
+		return nil, err
+	}
+	if err := b.reservationRepo.SettleReservation(ctx, input.Job.ID); err != nil {
+		return nil, fmt.Errorf("settle image job reservation: %w", err)
+	}
+	return cost, nil
+}
+
+func scaleImageJobUsage(usage OpenAIUsage, numerator, denominator int) OpenAIUsage {
+	if numerator <= 0 || denominator <= 0 || numerator >= denominator {
+		return usage
+	}
+	scale := func(value int) int {
+		return int(int64(value) * int64(numerator) / int64(denominator))
+	}
+	usage.InputTokens = scale(usage.InputTokens)
+	usage.ImageInputTokens = scale(usage.ImageInputTokens)
+	usage.OutputTokens = scale(usage.OutputTokens)
+	usage.CacheCreationInputTokens = scale(usage.CacheCreationInputTokens)
+	usage.CacheReadInputTokens = scale(usage.CacheReadInputTokens)
+	usage.ImageOutputTokens = scale(usage.ImageOutputTokens)
+	return usage
 }
 
 func (s *OpenAIGatewayService) EstimateImageJobCost(ctx context.Context, apiKey *APIKey, req ImageJobRequest, count int) (*CostBreakdown, bool, error) {

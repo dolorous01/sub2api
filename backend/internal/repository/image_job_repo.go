@@ -49,6 +49,28 @@ func (r *imageJobRepository) CreateReserved(ctx context.Context, create *service
 		return false, nil, fmt.Errorf("begin image job create: %w", err)
 	}
 	defer tx.Rollback()
+	if create.IdempotencyKeyHash != nil {
+		job, err := scanImageJob(tx.QueryRowContext(ctx, `
+			SELECT `+imageJobColumns+`
+			FROM image_jobs
+			WHERE api_key_id = $1 AND idempotency_key_hash = $2
+			FOR SHARE`, create.APIKeyID, *create.IdempotencyKeyHash))
+		if err == nil {
+			if job.RequestDigest != create.RequestDigest {
+				return false, nil, service.ErrImageJobIdempotencyConflict
+			}
+			if err := loadImageJobRelations(ctx, tx, job); err != nil {
+				return false, nil, err
+			}
+			if err := tx.Commit(); err != nil {
+				return false, nil, fmt.Errorf("commit image job replay: %w", err)
+			}
+			return false, job, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return false, nil, fmt.Errorf("load idempotent image job before reservation: %w", err)
+		}
+	}
 	if err := validateImageJobReservation(ctx, tx, create); err != nil {
 		return false, nil, err
 	}
@@ -416,6 +438,53 @@ func (r *imageJobRepository) UpsertResult(ctx context.Context, jobID int64, atte
 	return inserted, nil
 }
 
+func (r *imageJobRepository) SettleReservation(ctx context.Context, jobID int64) error {
+	return r.transitionImageJobReservation(ctx, jobID, "settled")
+}
+
+func (r *imageJobRepository) ReleaseReservation(ctx context.Context, jobID int64) error {
+	return r.transitionImageJobReservation(ctx, jobID, "released")
+}
+
+func (r *imageJobRepository) transitionImageJobReservation(ctx context.Context, jobID int64, target string) error {
+	if jobID <= 0 {
+		return fmt.Errorf("image job ID is required for reservation transition")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin image job reservation transition: %w", err)
+	}
+	defer tx.Rollback()
+	var reservationStatus, settlementStatus string
+	if err := tx.QueryRowContext(ctx, `
+		SELECT reservation_status, settlement_status
+		FROM image_jobs WHERE id = $1 FOR UPDATE`, jobID).Scan(&reservationStatus, &settlementStatus); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return service.ErrImageJobNotFound
+		}
+		return fmt.Errorf("lock image job reservation: %w", err)
+	}
+	if reservationStatus == target && settlementStatus == target {
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit image job reservation replay: %w", err)
+		}
+		return nil
+	}
+	if reservationStatus != "held" || (settlementStatus != "pending" && settlementStatus != "settling") {
+		return service.ErrImageJobConflict
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE image_jobs
+		SET reservation_status = $2, settlement_status = $2, updated_at = NOW()
+		WHERE id = $1`, jobID, target); err != nil {
+		return fmt.Errorf("update image job reservation: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit image job reservation transition: %w", err)
+	}
+	return nil
+}
+
 func (r *imageJobRepository) MarkTerminal(ctx context.Context, jobID int64, attemptID string, update service.ImageJobTerminalUpdate) error {
 	if !update.Status.Terminal() || update.Status == service.ImageJobStatusExpired {
 		return fmt.Errorf("%w: running -> %s", service.ErrImageJobInvalidTransition, update.Status)
@@ -423,6 +492,7 @@ func (r *imageJobRepository) MarkTerminal(ctx context.Context, jobID int64, atte
 	if update.FinishedAt.IsZero() {
 		update.FinishedAt = time.Now().UTC()
 	}
+	update.ReservationStatus, update.SettlementStatus = terminalImageJobReservationState(update.Status, update.CompletedCount)
 	var usage any
 	if len(update.Usage) > 0 {
 		if !json.Valid(update.Usage) {
@@ -455,6 +525,13 @@ func (r *imageJobRepository) MarkTerminal(ctx context.Context, jobID int64, atte
 		jobID, attemptID,
 	)
 	return imageJobCASResult(result, err, "mark image job terminal")
+}
+
+func terminalImageJobReservationState(status service.ImageJobStatus, completedCount int) (string, string) {
+	if (status == service.ImageJobStatusCompleted || status == service.ImageJobStatusPartial) && completedCount > 0 {
+		return "settled", "settled"
+	}
+	return "released", "released"
 }
 
 func (r *imageJobRepository) CancelOwned(ctx context.Context, publicID string, apiKeyID int64, at time.Time) (*service.ImageJob, error) {
@@ -563,6 +640,7 @@ func (r *imageJobRepository) RecoverStale(ctx context.Context, cutoff time.Time)
 	indeterminateResult, err := tx.ExecContext(ctx, `
 		UPDATE image_jobs
 		SET status = 'indeterminate', finished_at = NOW(), updated_at = NOW(),
+			reservation_status = 'released', settlement_status = 'released',
 			error_type = 'upstream_error', error_code = 'execution_indeterminate',
 			error_message = 'Image generation may have completed upstream; the job was not retried automatically',
 			error_retryable = false
@@ -628,7 +706,10 @@ func (r *imageJobRepository) MarkExpired(ctx context.Context, jobID int64, fromS
 	}
 	result, err := r.db.ExecContext(ctx, `
 		UPDATE image_jobs
-		SET status = 'expired', updated_at = $3
+		SET status = 'expired',
+			reservation_status = CASE WHEN reservation_status = 'settled' THEN 'settled' ELSE 'released' END,
+			settlement_status = CASE WHEN settlement_status = 'settled' THEN 'settled' ELSE 'released' END,
+			updated_at = $3
 		WHERE id = $1 AND status = $2`, jobID, string(fromStatus), expiredAt)
 	if err != nil {
 		return fmt.Errorf("mark image job expired: %w", err)

@@ -120,6 +120,8 @@ func TestImageJobRepositoryMethodSet(t *testing.T) {
 		"MarkTerminal",
 		"MarkUpstreamStarted",
 		"RecoverStale",
+		"ReleaseReservation",
+		"SettleReservation",
 		"UpsertResult",
 	}, methods)
 }

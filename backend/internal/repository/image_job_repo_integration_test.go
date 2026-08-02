@@ -107,6 +107,118 @@ func TestImageJobRepositoryCreateReservedReplayDoesNotDoubleReserve(t *testing.T
 	}
 }
 
+func TestImageJobRepositoryCreateReservedReplayAfterSettlementIgnoresCapacity(t *testing.T) {
+	repo, fixture := newImageJobIntegrationRepo(t)
+	if _, err := integrationDB.ExecContext(context.Background(), "UPDATE users SET balance = 0.75 WHERE id = $1", fixture.userID); err != nil {
+		t.Fatalf("set user balance: %v", err)
+	}
+	first := fixture.create("settled-replay", "settled-idempotency")
+	first.ReservedUSD = 0.75
+	created, job, err := repo.CreateReserved(context.Background(), first)
+	if err != nil || !created || job == nil {
+		t.Fatalf("first CreateReserved() = %t, %#v, %v", created, job, err)
+	}
+	if _, err := integrationDB.ExecContext(context.Background(), `
+		UPDATE image_jobs
+		SET reservation_status = 'settled', settlement_status = 'settled'
+		WHERE id = $1`, job.ID); err != nil {
+		t.Fatalf("settle image job reservation: %v", err)
+	}
+	if _, err := integrationDB.ExecContext(context.Background(), "UPDATE users SET balance = 0 WHERE id = $1", fixture.userID); err != nil {
+		t.Fatalf("exhaust user balance: %v", err)
+	}
+
+	replay := fixture.create("settled-replay", "settled-idempotency")
+	replay.ReservedUSD = 0.75
+	created, existing, err := repo.CreateReserved(context.Background(), replay)
+	if err != nil || created || existing == nil || existing.ID != job.ID {
+		t.Fatalf("replay CreateReserved() = %t, %#v, %v; want existing job %d", created, existing, err, job.ID)
+	}
+}
+
+func TestImageJobRepositoryMarkTerminalFailedReleasesReservation(t *testing.T) {
+	repo, fixture := newImageJobIntegrationRepo(t)
+	job := fixture.mustCreateRunning(t, repo, "failed-release", "attempt-failed", "upstream")
+
+	err := repo.MarkTerminal(context.Background(), job.ID, "attempt-failed", service.ImageJobTerminalUpdate{
+		Status: service.ImageJobStatusFailed,
+	})
+	if err != nil {
+		t.Fatalf("MarkTerminal() error = %v", err)
+	}
+	fixture.requireReservationState(t, job.ID, "released", "released")
+}
+
+func TestImageJobRepositoryMarkTerminalCompletedSettlesReservation(t *testing.T) {
+	repo, fixture := newImageJobIntegrationRepo(t)
+	job := fixture.mustCreateRunning(t, repo, "completed-settle", "attempt-completed", "upstream")
+
+	err := repo.MarkTerminal(context.Background(), job.ID, "attempt-completed", service.ImageJobTerminalUpdate{
+		Status: service.ImageJobStatusCompleted, CompletedCount: 1,
+	})
+	if err != nil {
+		t.Fatalf("MarkTerminal() error = %v", err)
+	}
+	fixture.requireReservationState(t, job.ID, "settled", "settled")
+}
+
+func TestImageJobRepositoryRunningCancelCompletionReleasesReservation(t *testing.T) {
+	repo, fixture := newImageJobIntegrationRepo(t)
+	job := fixture.mustCreateRunning(t, repo, "running-cancel", "attempt-canceled", "upstream")
+	if _, err := repo.CancelOwned(context.Background(), job.PublicID, fixture.apiKeyID, time.Now().UTC()); err != nil {
+		t.Fatalf("CancelOwned() error = %v", err)
+	}
+	if err := repo.MarkTerminal(context.Background(), job.ID, "attempt-canceled", service.ImageJobTerminalUpdate{
+		Status: service.ImageJobStatusCanceled,
+	}); err != nil {
+		t.Fatalf("MarkTerminal() error = %v", err)
+	}
+	fixture.requireReservationState(t, job.ID, "released", "released")
+}
+
+func TestImageJobRepositoryRecoverStaleIndeterminateReleasesReservation(t *testing.T) {
+	repo, fixture := newImageJobIntegrationRepo(t)
+	job := fixture.mustCreateRunning(t, repo, "stale-release", "attempt-stale", "upstream")
+	staleAt := time.Now().UTC().Add(-time.Hour)
+	if _, err := integrationDB.ExecContext(context.Background(), `
+		UPDATE image_jobs SET heartbeat_at = $2, started_at = $2, updated_at = $2 WHERE id = $1`, job.ID, staleAt); err != nil {
+		t.Fatalf("make image job stale: %v", err)
+	}
+
+	_, indeterminate, err := repo.RecoverStale(context.Background(), staleAt.Add(time.Minute))
+	if err != nil || indeterminate != 1 {
+		t.Fatalf("RecoverStale() indeterminate = %d, error = %v", indeterminate, err)
+	}
+	fixture.requireReservationState(t, job.ID, "released", "released")
+}
+
+func TestImageJobRepositoryReservationTransitionsAreIdempotent(t *testing.T) {
+	repo, fixture := newImageJobIntegrationRepo(t)
+	created, settledJob, err := repo.CreateReserved(context.Background(), fixture.create("settle-transition", ""))
+	if err != nil || !created || settledJob == nil {
+		t.Fatalf("settled CreateReserved() = %t, %#v, %v", created, settledJob, err)
+	}
+	if err := repo.SettleReservation(context.Background(), settledJob.ID); err != nil {
+		t.Fatalf("first SettleReservation() error = %v", err)
+	}
+	if err := repo.SettleReservation(context.Background(), settledJob.ID); err != nil {
+		t.Fatalf("replayed SettleReservation() error = %v", err)
+	}
+	fixture.requireReservationState(t, settledJob.ID, "settled", "settled")
+
+	created, releasedJob, err := repo.CreateReserved(context.Background(), fixture.create("release-transition", ""))
+	if err != nil || !created || releasedJob == nil {
+		t.Fatalf("released CreateReserved() = %t, %#v, %v", created, releasedJob, err)
+	}
+	if err := repo.ReleaseReservation(context.Background(), releasedJob.ID); err != nil {
+		t.Fatalf("first ReleaseReservation() error = %v", err)
+	}
+	if err := repo.ReleaseReservation(context.Background(), releasedJob.ID); err != nil {
+		t.Fatalf("replayed ReleaseReservation() error = %v", err)
+	}
+	fixture.requireReservationState(t, releasedJob.ID, "released", "released")
+}
+
 func TestImageJobRepositoryCreateReservedRejectsHeldAPIKeyQuotaOvercommit(t *testing.T) {
 	repo, fixture := newImageJobIntegrationRepo(t)
 	if _, err := integrationDB.ExecContext(context.Background(),
@@ -151,6 +263,44 @@ func TestImageJobRepositoryCreateReservedRejectsHeldSubscriptionOvercommit(t *te
 	second.ReservationSubscriptionID = &subscription.ID
 	if _, _, err := repo.CreateReserved(context.Background(), second); !errors.Is(err, service.ErrImageJobReservationInsufficient) {
 		t.Fatalf("second CreateReserved() error = %v, want reservation insufficient", err)
+	}
+}
+
+func TestImageJobRepositoryCreateReservedRejectsWeeklyAndMonthlyHeldSubscriptionOvercommit(t *testing.T) {
+	tests := []struct {
+		name        string
+		limitColumn string
+		usage       service.UserSubscription
+	}{
+		{name: "weekly", limitColumn: "weekly_limit_usd", usage: service.UserSubscription{WeeklyUsageUSD: 0.10}},
+		{name: "monthly", limitColumn: "monthly_limit_usd", usage: service.UserSubscription{MonthlyUsageUSD: 0.10}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, fixture := newImageJobIntegrationRepo(t)
+			query := fmt.Sprintf("UPDATE groups SET %s = 1.00 WHERE id = $1", tc.limitColumn)
+			if _, err := integrationDB.ExecContext(context.Background(), query, fixture.groupID); err != nil {
+				t.Fatalf("set subscription %s limit: %v", tc.name, err)
+			}
+			tc.usage.UserID = fixture.userID
+			tc.usage.GroupID = fixture.groupID
+			subscription := mustCreateSubscription(t, integrationEntClient, &tc.usage)
+			first := fixture.create(tc.name+"-reserve-a", "")
+			first.ReservedUSD = 0.60
+			first.ReservationBillingType = service.BillingTypeSubscription
+			first.ReservationSubscriptionID = &subscription.ID
+			created, _, err := repo.CreateReserved(context.Background(), first)
+			if err != nil || !created {
+				t.Fatalf("first CreateReserved() created = %t, error = %v", created, err)
+			}
+			second := fixture.create(tc.name+"-reserve-b", "")
+			second.ReservedUSD = 0.40
+			second.ReservationBillingType = service.BillingTypeSubscription
+			second.ReservationSubscriptionID = &subscription.ID
+			if _, _, err := repo.CreateReserved(context.Background(), second); !errors.Is(err, service.ErrImageJobReservationInsufficient) {
+				t.Fatalf("second CreateReserved() error = %v, want reservation insufficient", err)
+			}
+		})
 	}
 }
 
@@ -200,5 +350,33 @@ func (f *imageJobIntegrationFixture) create(digest, idempotency string) *service
 		IdempotencyKeyHash: idempotencyHash,
 		ReservedUSD:        1,
 		ExpiresAt:          time.Now().Add(time.Hour),
+	}
+}
+
+func (f *imageJobIntegrationFixture) mustCreateRunning(t *testing.T, repo service.ImageJobRepository, digest, attemptID, phase string) *service.ImageJob {
+	t.Helper()
+	created, job, err := repo.CreateReserved(context.Background(), f.create(digest, ""))
+	if err != nil || !created || job == nil {
+		t.Fatalf("CreateReserved() = %t, %#v, %v", created, job, err)
+	}
+	if _, err := integrationDB.ExecContext(context.Background(), `
+		UPDATE image_jobs
+		SET status = 'running', attempt_id = $2, worker_id = 'test-worker',
+			execution_phase = $3, started_at = NOW(), heartbeat_at = NOW()
+		WHERE id = $1`, job.ID, attemptID, phase); err != nil {
+		t.Fatalf("make image job running: %v", err)
+	}
+	return job
+}
+
+func (f *imageJobIntegrationFixture) requireReservationState(t *testing.T, jobID int64, reservationStatus, settlementStatus string) {
+	t.Helper()
+	var gotReservation, gotSettlement string
+	if err := integrationDB.QueryRowContext(context.Background(), `
+		SELECT reservation_status, settlement_status FROM image_jobs WHERE id = $1`, jobID).Scan(&gotReservation, &gotSettlement); err != nil {
+		t.Fatalf("load reservation state: %v", err)
+	}
+	if gotReservation != reservationStatus || gotSettlement != settlementStatus {
+		t.Fatalf("reservation state = %s/%s, want %s/%s", gotReservation, gotSettlement, reservationStatus, settlementStatus)
 	}
 }

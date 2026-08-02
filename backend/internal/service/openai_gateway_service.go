@@ -6247,19 +6247,21 @@ func (s *OpenAIGatewayService) replaceModelInResponseBody(body []byte, fromModel
 
 // OpenAIRecordUsageInput input for recording usage
 type OpenAIRecordUsageInput struct {
-	Result             *OpenAIForwardResult
-	APIKey             *APIKey
-	User               *User
-	Account            *Account
-	Subscription       *UserSubscription
-	InboundEndpoint    string
-	UpstreamEndpoint   string
-	UserAgent          string // 请求的 User-Agent
-	IPAddress          string // 请求的客户端 IP 地址
-	BillingRequestID   string // Optional stable billing idempotency key for internally replayed work.
-	RequestPayloadHash string
-	APIKeyService      APIKeyQuotaUpdater
-	QuotaPlatform      string // user×platform quota platform resolved by the handler before async billing.
+	Result                *OpenAIForwardResult
+	APIKey                *APIKey
+	User                  *User
+	Account               *Account
+	Subscription          *UserSubscription
+	InboundEndpoint       string
+	UpstreamEndpoint      string
+	UserAgent             string // 请求的 User-Agent
+	IPAddress             string // 请求的客户端 IP 地址
+	BillingRequestID      string // Optional stable billing idempotency key for internally replayed work.
+	BillingType           *int8  // Optional persisted billing pool override for internally replayed work.
+	BillingSubscriptionID *int64
+	RequestPayloadHash    string
+	APIKeyService         APIKeyQuotaUpdater
+	QuotaPlatform         string // user×platform quota platform resolved by the handler before async billing.
 	// CyberBlocked 为 true 时把该用量行标记为 cyber（request_type=cyber），计费逻辑不变。
 	CyberBlocked bool
 	ChannelUsageFields
@@ -6349,6 +6351,24 @@ func (s *OpenAIGatewayService) RecordUsageWithCost(ctx context.Context, input *O
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
+	billingType := BillingTypeBalance
+	if subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType() {
+		billingType = BillingTypeSubscription
+	}
+	if input.BillingType != nil {
+		billingType = *input.BillingType
+		switch billingType {
+		case BillingTypeBalance:
+			subscription = nil
+		case BillingTypeSubscription:
+			if input.BillingSubscriptionID == nil || *input.BillingSubscriptionID <= 0 {
+				return nil, errors.New("openai persisted subscription billing ID is required")
+			}
+			subscription = &UserSubscription{ID: *input.BillingSubscriptionID}
+		default:
+			return nil, fmt.Errorf("openai persisted billing type %d is invalid", billingType)
+		}
+	}
 	ApplyOpenAIImageBillingResolution(result)
 
 	// 计算实际的新输入token（减去缓存读取的token）
@@ -6426,11 +6446,7 @@ func (s *OpenAIGatewayService) RecordUsageWithCost(ctx context.Context, input *O
 	}
 
 	// Determine billing type
-	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
-	billingType := BillingTypeBalance
-	if isSubscriptionBilling {
-		billingType = BillingTypeSubscription
-	}
+	isSubscriptionBilling := billingType == BillingTypeSubscription
 
 	// Create usage log
 	durationMs := int(result.Duration.Milliseconds())

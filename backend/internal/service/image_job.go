@@ -259,6 +259,8 @@ type ImageJobRepository interface {
 	MarkUpstreamStarted(ctx context.Context, jobID int64, attemptID, mappedModel string) error
 	Heartbeat(ctx context.Context, jobID int64, attemptID string, at time.Time) error
 	UpsertResult(ctx context.Context, jobID int64, attemptID string, result *ImageJobResult) (inserted bool, err error)
+	SettleReservation(ctx context.Context, jobID int64) error
+	ReleaseReservation(ctx context.Context, jobID int64) error
 	MarkTerminal(ctx context.Context, jobID int64, attemptID string, update ImageJobTerminalUpdate) error
 	CancelOwned(ctx context.Context, publicID string, apiKeyID int64, at time.Time) (*ImageJob, error)
 	CancelAdmin(ctx context.Context, publicID string, at time.Time) (*ImageJob, error)
