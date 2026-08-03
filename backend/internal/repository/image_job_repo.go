@@ -514,8 +514,15 @@ func (r *imageJobRepository) MarkTerminal(ctx context.Context, jobID int64, atte
 			finished_at = $4, canceled_at = $5,
 			error_type = $6, error_code = $7, error_message = $8,
 			error_retryable = $9,
-			reservation_status = COALESCE(NULLIF($10, ''), reservation_status),
-			settlement_status = COALESCE(NULLIF($11, ''), settlement_status),
+			reservation_status = CASE
+				WHEN reservation_status = 'held' THEN COALESCE(NULLIF($10, ''), reservation_status)
+				ELSE reservation_status
+			END,
+			settlement_status = CASE
+				WHEN reservation_status = 'held' AND settlement_status IN ('pending', 'settling')
+					THEN COALESCE(NULLIF($11, ''), settlement_status)
+				ELSE settlement_status
+			END,
 			updated_at = NOW()
 		WHERE id = $12 AND attempt_id = $13 AND status IN ('queued', 'running')`,
 		string(update.Status), update.CompletedCount, usage,
@@ -640,7 +647,14 @@ func (r *imageJobRepository) RecoverStale(ctx context.Context, cutoff time.Time)
 	indeterminateResult, err := tx.ExecContext(ctx, `
 		UPDATE image_jobs
 		SET status = 'indeterminate', finished_at = NOW(), updated_at = NOW(),
-			reservation_status = 'released', settlement_status = 'released',
+			reservation_status = CASE
+				WHEN reservation_status = 'held' THEN 'released'
+				ELSE reservation_status
+			END,
+			settlement_status = CASE
+				WHEN reservation_status = 'held' AND settlement_status IN ('pending', 'settling') THEN 'released'
+				ELSE settlement_status
+			END,
 			error_type = 'upstream_error', error_code = 'execution_indeterminate',
 			error_message = 'Image generation may have completed upstream; the job was not retried automatically',
 			error_retryable = false

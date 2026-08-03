@@ -205,6 +205,29 @@ func TestImageJobBillingSettlementSkipsBillingWithoutPersistedResult(t *testing.
 	}
 }
 
+func TestImageJobBillingSequenceZeroResultKeepsReservationHeld(t *testing.T) {
+	gateway := &fakeImageJobBillingGateway{}
+	reservations := &fakeImageJobReservationRepository{}
+	billing := NewImageJobBilling(gateway, 1, reservations)
+
+	cost, err := billing.Settle(context.Background(), ImageJobSettlementInput{
+		Job:                  &ImageJob{ID: 42, PublicID: "imgjob_sequence_empty", Mode: "sequence"},
+		PersistedResultCount: 0,
+	})
+	if err != nil {
+		t.Fatalf("Settle() error = %v", err)
+	}
+	if cost == nil || cost.ActualCost != 0 {
+		t.Fatalf("Settle() cost = %#v, want zero cost", cost)
+	}
+	if gateway.recordCalls != 0 {
+		t.Fatalf("RecordUsageWithCost() calls = %d, want 0", gateway.recordCalls)
+	}
+	if reservations.released[42] != 0 || reservations.settled[42] != 0 {
+		t.Fatalf("reservation transitions = released:%d settled:%d, want 0/0", reservations.released[42], reservations.settled[42])
+	}
+}
+
 func TestImageJobBillingSettlementUsesPersistedSubscription(t *testing.T) {
 	gateway := &fakeImageJobBillingGateway{}
 	billing := NewImageJobBilling(gateway, 1, &fakeImageJobReservationRepository{})

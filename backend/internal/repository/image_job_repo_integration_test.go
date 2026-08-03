@@ -15,11 +15,11 @@ import (
 
 func TestImageJobRepositoryCreateReservedIdempotency(t *testing.T) {
 	repo, fixture := newImageJobIntegrationRepo(t)
-	created, replay, err := repo.CreateReserved(context.Background(), fixture.create("hash-a", "idem-a"))
-	if err != nil || !created || replay != nil {
-		t.Fatalf("first CreateReserved() = %t, %#v, %v", created, replay, err)
+	created, job, err := repo.CreateReserved(context.Background(), fixture.create("hash-a", "idem-a"))
+	if err != nil || !created || job == nil {
+		t.Fatalf("first CreateReserved() = %t, %#v, %v", created, job, err)
 	}
-	created, replay, err = repo.CreateReserved(context.Background(), fixture.create("hash-a", "idem-a"))
+	created, replay, err := repo.CreateReserved(context.Background(), fixture.create("hash-a", "idem-a"))
 	if err != nil || created || replay == nil {
 		t.Fatalf("replay CreateReserved() = %t, %#v, %v", created, replay, err)
 	}
@@ -162,6 +162,22 @@ func TestImageJobRepositoryMarkTerminalCompletedSettlesReservation(t *testing.T)
 	fixture.requireReservationState(t, job.ID, "settled", "settled")
 }
 
+func TestImageJobRepositoryMarkTerminalPreservesSettledReservation(t *testing.T) {
+	repo, fixture := newImageJobIntegrationRepo(t)
+	job := fixture.mustCreateRunning(t, repo, "terminal-settled", "attempt-terminal-settled", "upstream")
+	if err := repo.SettleReservation(context.Background(), job.ID); err != nil {
+		t.Fatalf("SettleReservation() error = %v", err)
+	}
+
+	err := repo.MarkTerminal(context.Background(), job.ID, "attempt-terminal-settled", service.ImageJobTerminalUpdate{
+		Status: service.ImageJobStatusFailed,
+	})
+	if err != nil {
+		t.Fatalf("MarkTerminal() error = %v", err)
+	}
+	fixture.requireReservationState(t, job.ID, "settled", "settled")
+}
+
 func TestImageJobRepositoryRunningCancelCompletionReleasesReservation(t *testing.T) {
 	repo, fixture := newImageJobIntegrationRepo(t)
 	job := fixture.mustCreateRunning(t, repo, "running-cancel", "attempt-canceled", "upstream")
@@ -190,6 +206,25 @@ func TestImageJobRepositoryRecoverStaleIndeterminateReleasesReservation(t *testi
 		t.Fatalf("RecoverStale() indeterminate = %d, error = %v", indeterminate, err)
 	}
 	fixture.requireReservationState(t, job.ID, "released", "released")
+}
+
+func TestImageJobRepositoryRecoverStalePreservesSettledReservation(t *testing.T) {
+	repo, fixture := newImageJobIntegrationRepo(t)
+	job := fixture.mustCreateRunning(t, repo, "stale-settled", "attempt-stale-settled", "upstream")
+	if err := repo.SettleReservation(context.Background(), job.ID); err != nil {
+		t.Fatalf("SettleReservation() error = %v", err)
+	}
+	staleAt := time.Now().UTC().Add(-time.Hour)
+	if _, err := integrationDB.ExecContext(context.Background(), `
+		UPDATE image_jobs SET heartbeat_at = $2, started_at = $2, updated_at = $2 WHERE id = $1`, job.ID, staleAt); err != nil {
+		t.Fatalf("make settled image job stale: %v", err)
+	}
+
+	_, indeterminate, err := repo.RecoverStale(context.Background(), staleAt.Add(time.Minute))
+	if err != nil || indeterminate != 1 {
+		t.Fatalf("RecoverStale() indeterminate = %d, error = %v", indeterminate, err)
+	}
+	fixture.requireReservationState(t, job.ID, "settled", "settled")
 }
 
 func TestImageJobRepositoryReservationTransitionsAreIdempotent(t *testing.T) {

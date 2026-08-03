@@ -114,6 +114,9 @@ func (b *ImageJobBilling) Settle(ctx context.Context, input ImageJobSettlementIn
 		return nil, fmt.Errorf("image job reservation repository is unavailable")
 	}
 	if input.PersistedResultCount <= 0 {
+		if input.Job.Mode == "sequence" {
+			return &CostBreakdown{}, nil
+		}
 		if err := b.reservationRepo.ReleaseReservation(ctx, input.Job.ID); err != nil {
 			return nil, fmt.Errorf("release image job reservation: %w", err)
 		}
