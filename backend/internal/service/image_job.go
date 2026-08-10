@@ -17,6 +17,10 @@ var (
 	ErrImageJobReservationUnavailable  = errors.New("image job reservation unavailable")
 	ErrImageJobCancelConflict          = errors.New("image job cannot be canceled")
 	ErrImageJobAttemptMismatch         = errors.New("image job attempt mismatch")
+	ErrImageJobDisabled                = errors.New("image jobs are disabled")
+	ErrImageJobUnavailable             = errors.New("image jobs are unavailable")
+	ErrImageJobPermissionDenied        = errors.New("image generation is not enabled for this group")
+	ErrImageJobInvalidRequest          = errors.New("invalid image job request")
 )
 
 type ImageJobStatus string

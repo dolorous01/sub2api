@@ -24,17 +24,39 @@ func NormalizeImageJobRequest(
 	if store == nil {
 		return ImageJobRequest{}, nil, "", fmt.Errorf("image job object store is required")
 	}
-	if parsed == nil {
-		return ImageJobRequest{}, nil, "", fmt.Errorf("parsed image request is required")
-	}
-	if err := validateImageJobObjectSuffix(objectSuffix); err != nil {
+	normalized, inputs, uploads, digest, err := prepareImageJobRequest(objectSuffix, parsed, scenes, maxInputs)
+	if err != nil {
 		return ImageJobRequest{}, nil, "", err
 	}
+	if err := storePreparedImageJobUploads(ctx, store, uploads); err != nil {
+		return ImageJobRequest{}, nil, "", err
+	}
+	return normalized, inputs, digest, nil
+}
+
+type preparedImageJobUpload struct {
+	objectKey   string
+	contentType string
+	data        []byte
+}
+
+func prepareImageJobRequest(
+	objectSuffix string,
+	parsed *OpenAIImagesRequest,
+	scenes []string,
+	maxInputs int,
+) (ImageJobRequest, []ImageJobInput, []preparedImageJobUpload, string, error) {
+	if parsed == nil {
+		return ImageJobRequest{}, nil, nil, "", fmt.Errorf("parsed image request is required")
+	}
+	if err := validateImageJobObjectSuffix(objectSuffix); err != nil {
+		return ImageJobRequest{}, nil, nil, "", err
+	}
 	if maxInputs <= 0 {
-		return ImageJobRequest{}, nil, "", fmt.Errorf("max image job inputs must be greater than 0")
+		return ImageJobRequest{}, nil, nil, "", fmt.Errorf("max image job inputs must be greater than 0")
 	}
 	if len(parsed.Uploads)+len(parsed.InputImageURLs) > maxInputs {
-		return ImageJobRequest{}, nil, "", fmt.Errorf("image request has %d inputs, maximum is %d", len(parsed.Uploads)+len(parsed.InputImageURLs), maxInputs)
+		return ImageJobRequest{}, nil, nil, "", fmt.Errorf("image request has %d inputs, maximum is %d", len(parsed.Uploads)+len(parsed.InputImageURLs), maxInputs)
 	}
 
 	normalized := ImageJobRequest{
@@ -59,60 +81,49 @@ func NormalizeImageJobRequest(
 
 	prefix := "image-jobs/" + strings.Trim(objectSuffix, "/")
 	inputs := make([]ImageJobInput, 0, len(parsed.Uploads)+1)
-	writtenKeys := make([]string, 0, len(parsed.Uploads)+1)
-	cleanup := func(cause error) error {
-		var cleanupErrors []error
-		for i := len(writtenKeys) - 1; i >= 0; i-- {
-			if err := store.Delete(context.WithoutCancel(ctx), writtenKeys[i]); err != nil {
-				cleanupErrors = append(cleanupErrors, fmt.Errorf("delete image job input %q: %w", writtenKeys[i], err))
-			}
-		}
-		return errors.Join(append([]error{cause}, cleanupErrors...)...)
-	}
+	uploads := make([]preparedImageJobUpload, 0, len(parsed.Uploads)+1)
 
 	for index, upload := range parsed.Uploads {
-		ref, input, err := storeImageJobUpload(ctx, store, prefix, "image", index, upload)
+		ref, input, prepared, err := prepareImageJobUpload(prefix, "image", index, upload)
 		if err != nil {
-			return ImageJobRequest{}, nil, "", cleanup(err)
+			return ImageJobRequest{}, nil, nil, "", err
 		}
 		normalized.Inputs = append(normalized.Inputs, ref)
 		inputs = append(inputs, input)
-		writtenKeys = append(writtenKeys, input.ObjectKey)
+		uploads = append(uploads, prepared)
 	}
 	if parsed.MaskUpload != nil {
-		ref, input, err := storeImageJobUpload(ctx, store, prefix, "mask", 0, *parsed.MaskUpload)
+		ref, input, prepared, err := prepareImageJobUpload(prefix, "mask", 0, *parsed.MaskUpload)
 		if err != nil {
-			return ImageJobRequest{}, nil, "", cleanup(err)
+			return ImageJobRequest{}, nil, nil, "", err
 		}
 		normalized.Mask = &ref
 		inputs = append(inputs, input)
-		writtenKeys = append(writtenKeys, input.ObjectKey)
+		uploads = append(uploads, prepared)
 	}
 
 	digest, err := digestImageJobRequest(normalized)
 	if err != nil {
-		return ImageJobRequest{}, nil, "", cleanup(err)
+		return ImageJobRequest{}, nil, nil, "", err
 	}
-	return normalized, inputs, digest, nil
+	return normalized, inputs, uploads, digest, nil
 }
 
-func storeImageJobUpload(
-	ctx context.Context,
-	store ImageJobObjectStore,
+func prepareImageJobUpload(
 	prefix string,
 	kind string,
 	index int,
 	upload OpenAIImagesUpload,
-) (ImageJobInputRef, ImageJobInput, error) {
+) (ImageJobInputRef, ImageJobInput, preparedImageJobUpload, error) {
 	if len(upload.Data) == 0 {
-		return ImageJobInputRef{}, ImageJobInput{}, fmt.Errorf("%s image input %d is empty", kind, index)
+		return ImageJobInputRef{}, ImageJobInput{}, preparedImageJobUpload{}, fmt.Errorf("%s image input %d is empty", kind, index)
 	}
 	if len(upload.Data) > openAIImageMaxUploadPartSize {
-		return ImageJobInputRef{}, ImageJobInput{}, fmt.Errorf("%s image input %d exceeds maximum size", kind, index)
+		return ImageJobInputRef{}, ImageJobInput{}, preparedImageJobUpload{}, fmt.Errorf("%s image input %d exceeds maximum size", kind, index)
 	}
 	contentType, extension, err := normalizeImageJobMIMEType(upload.ContentType)
 	if err != nil {
-		return ImageJobInputRef{}, ImageJobInput{}, fmt.Errorf("%s image input %d: %w", kind, index, err)
+		return ImageJobInputRef{}, ImageJobInput{}, preparedImageJobUpload{}, fmt.Errorf("%s image input %d: %w", kind, index, err)
 	}
 
 	sum := sha256.Sum256(upload.Data)
@@ -122,9 +133,6 @@ func storeImageJobUpload(
 		objectKey = fmt.Sprintf("%s/mask/%s.%s", prefix, digest, extension)
 	} else {
 		objectKey = fmt.Sprintf("%s/inputs/%d-%s.%s", prefix, index, digest, extension)
-	}
-	if err := store.Put(ctx, objectKey, upload.Data, contentType); err != nil {
-		return ImageJobInputRef{}, ImageJobInput{}, fmt.Errorf("store %s image input %d: %w", kind, index, err)
 	}
 
 	fieldName := strings.TrimSpace(upload.FieldName)
@@ -150,7 +158,32 @@ func storeImageJobUpload(
 		ByteSize:  int64(len(upload.Data)),
 		SHA256:    digest,
 	}
-	return ref, input, nil
+	prepared := preparedImageJobUpload{objectKey: objectKey, contentType: contentType, data: upload.Data}
+	return ref, input, prepared, nil
+}
+
+func storePreparedImageJobUploads(ctx context.Context, store ImageJobObjectStore, uploads []preparedImageJobUpload) error {
+	if store == nil {
+		return fmt.Errorf("image job object store is required")
+	}
+	writtenKeys := make([]string, 0, len(uploads))
+	cleanup := func(cause error) error {
+		cleanupErrors := []error{cause}
+		for index := len(writtenKeys) - 1; index >= 0; index-- {
+			if err := store.Delete(context.WithoutCancel(ctx), writtenKeys[index]); err != nil {
+				cleanupErrors = append(cleanupErrors, fmt.Errorf("delete image job input %q: %w", writtenKeys[index], err))
+			}
+		}
+		return errors.Join(cleanupErrors...)
+	}
+
+	for index, upload := range uploads {
+		if err := store.Put(ctx, upload.objectKey, upload.data, upload.contentType); err != nil {
+			return cleanup(fmt.Errorf("store image job input %d: %w", index, err))
+		}
+		writtenKeys = append(writtenKeys, upload.objectKey)
+	}
+	return nil
 }
 
 func validateImageJobObjectSuffix(suffix string) error {
