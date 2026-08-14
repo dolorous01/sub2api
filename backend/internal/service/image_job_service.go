@@ -180,6 +180,51 @@ func (s *ImageJobService) GetAdmin(ctx context.Context, publicID string) (*Image
 	return s.repo.GetAdmin(ctx, strings.TrimSpace(publicID))
 }
 
+func (s *ImageJobService) GetOwnedResult(ctx context.Context, publicID string, apiKeyID int64, index int) (*ImageJobObject, error) {
+	job, err := s.GetOwned(ctx, publicID, apiKeyID)
+	if err != nil {
+		return nil, err
+	}
+	return s.getResultObject(ctx, job, index)
+}
+
+func (s *ImageJobService) GetAdminResult(ctx context.Context, publicID string, index int) (*ImageJobObject, error) {
+	job, err := s.GetAdmin(ctx, publicID)
+	if err != nil {
+		return nil, err
+	}
+	return s.getResultObject(ctx, job, index)
+}
+
+func (s *ImageJobService) getResultObject(ctx context.Context, job *ImageJob, index int) (*ImageJobObject, error) {
+	if s == nil || s.store == nil {
+		return nil, ErrImageJobUnavailable
+	}
+	if job == nil || index < 0 {
+		return nil, ErrImageJobNotFound
+	}
+	if job.Status == ImageJobStatusExpired || (!job.ExpiresAt.IsZero() && !timezone.Now().Before(job.ExpiresAt)) {
+		return nil, ErrImageJobExpired
+	}
+	for _, result := range job.Results {
+		if result.Index != index || strings.TrimSpace(result.ObjectKey) == "" {
+			continue
+		}
+		object, err := s.store.Get(ctx, result.ObjectKey)
+		if err != nil || object == nil {
+			return nil, fmt.Errorf("%w: result %d", ErrImageJobNotFound, index)
+		}
+		if strings.TrimSpace(object.ContentType) == "" {
+			object.ContentType = result.MIMEType
+		}
+		if object.Size <= 0 {
+			object.Size = int64(len(object.Data))
+		}
+		return object, nil
+	}
+	return nil, fmt.Errorf("%w: result %d", ErrImageJobNotFound, index)
+}
+
 func (s *ImageJobService) CancelOwned(ctx context.Context, publicID string, apiKeyID int64) (*ImageJob, error) {
 	if s == nil || s.repo == nil {
 		return nil, ErrImageJobUnavailable

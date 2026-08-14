@@ -543,6 +543,27 @@ func ProvideAPIKeyService(
 	return svc
 }
 
+func ProvideImageJobBilling(
+	gateway *OpenAIGatewayService,
+	repo ImageJobRepository,
+	cfg *config.Config,
+) *ImageJobBilling {
+	maxReservationUSD := 0.0
+	if cfg != nil {
+		maxReservationUSD = cfg.Gateway.ImageJobs.MaxReservationUSD
+	}
+	return NewImageJobBilling(gateway, maxReservationUSD, repo)
+}
+
+func ProvideImageJobService(
+	repo ImageJobRepository,
+	store ImageJobObjectStore,
+	billing *ImageJobBilling,
+	cfg *config.Config,
+) *ImageJobService {
+	return NewImageJobService(repo, store, billing, cfg)
+}
+
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
@@ -564,6 +585,8 @@ var ProviderSet = wire.NewSet(
 	NewAdminService,
 	NewGatewayService,
 	NewOpenAIGatewayService,
+	ProvideImageJobBilling,
+	ProvideImageJobService,
 	wire.Bind(new(AccountRuntimeBlocker), new(*OpenAIGatewayService)),
 	NewOAuthService,
 	ProvideOpenAIOAuthService,

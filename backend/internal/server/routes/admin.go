@@ -106,6 +106,21 @@ func RegisterAdminRoutes(
 
 		// 邀请返利（专属用户管理）
 		registerAffiliateRoutes(admin, h)
+
+		// 异步图片任务运维
+		registerImageJobRoutes(admin, h)
+	}
+}
+
+func registerImageJobRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	if h == nil || h.Admin == nil || h.Admin.ImageJob == nil {
+		return
+	}
+	jobs := admin.Group("/image-jobs")
+	{
+		jobs.GET("/:job_id", h.Admin.ImageJob.Get)
+		jobs.GET("/:job_id/results/:index", h.Admin.ImageJob.GetResult)
+		jobs.DELETE("/:job_id", h.Admin.ImageJob.Cancel)
 	}
 }
 

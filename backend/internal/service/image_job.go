@@ -21,6 +21,7 @@ var (
 	ErrImageJobUnavailable             = errors.New("image jobs are unavailable")
 	ErrImageJobPermissionDenied        = errors.New("image generation is not enabled for this group")
 	ErrImageJobInvalidRequest          = errors.New("invalid image job request")
+	ErrImageJobExpired                 = errors.New("image job results have expired")
 )
 
 type ImageJobStatus string

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,24 @@ import (
 )
 
 const maxImageJobObjectBytes int64 = 20 << 20
+
+type disabledImageJobObjectStore struct{}
+
+func (*disabledImageJobObjectStore) Put(context.Context, string, []byte, string) error {
+	return service.ErrImageJobDisabled
+}
+
+func (*disabledImageJobObjectStore) Get(context.Context, string) (*service.ImageJobObject, error) {
+	return nil, service.ErrImageJobDisabled
+}
+
+func (*disabledImageJobObjectStore) Delete(context.Context, string) error {
+	return service.ErrImageJobDisabled
+}
+
+func (*disabledImageJobObjectStore) Health(context.Context) error {
+	return service.ErrImageJobDisabled
+}
 
 func validateImageJobObjectKey(key string) error {
 	if key == "" {
@@ -41,4 +60,11 @@ func NewImageJobObjectStore(cfg config.ImageJobStorageConfig) (service.ImageJobO
 	default:
 		return nil, fmt.Errorf("unsupported image job object storage driver %q", cfg.Driver)
 	}
+}
+
+func ProvideImageJobObjectStore(cfg *config.Config) (service.ImageJobObjectStore, error) {
+	if cfg == nil || !cfg.Gateway.ImageJobs.Enabled {
+		return &disabledImageJobObjectStore{}, nil
+	}
+	return NewImageJobObjectStore(cfg.Gateway.ImageJobs.Storage)
 }

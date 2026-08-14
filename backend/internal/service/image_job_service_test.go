@@ -164,6 +164,36 @@ func TestImageJobServiceCancelOwnedAndAdminDelegateScope(t *testing.T) {
 	}
 }
 
+func TestImageJobServiceGetOwnedResultEnforcesOwnershipAndExpiry(t *testing.T) {
+	svc, deps := newImageJobServiceFixture()
+	job, _, err := svc.Create(context.Background(), deps.createInput(""))
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	job.Status = ImageJobStatusCompleted
+	job.Results = []ImageJobResult{{Index: 0, Status: "completed", ObjectKey: "image-jobs/result.png", MIMEType: "image/png"}}
+	if err := deps.store.Put(context.Background(), job.Results[0].ObjectKey, []byte("png"), "image/png"); err != nil {
+		t.Fatalf("store Put() error = %v", err)
+	}
+
+	object, err := svc.GetOwnedResult(context.Background(), job.PublicID, job.APIKeyID, 0)
+	if err != nil || string(object.Data) != "png" || object.ContentType != "image/png" {
+		t.Fatalf("GetOwnedResult() = %#v, %v", object, err)
+	}
+	if _, err := svc.GetOwnedResult(context.Background(), job.PublicID, job.APIKeyID+1, 0); !errors.Is(err, ErrImageJobNotFound) {
+		t.Fatalf("GetOwnedResult() ownership error = %v, want not found", err)
+	}
+	job.ExpiresAt = time.Now().Add(-time.Second)
+	if _, err := svc.GetOwnedResult(context.Background(), job.PublicID, job.APIKeyID, 0); !errors.Is(err, ErrImageJobExpired) {
+		t.Fatalf("GetOwnedResult() elapsed TTL error = %v, want expired", err)
+	}
+	job.ExpiresAt = time.Now().Add(time.Hour)
+	job.Status = ImageJobStatusExpired
+	if _, err := svc.GetOwnedResult(context.Background(), job.PublicID, job.APIKeyID, 0); !errors.Is(err, ErrImageJobExpired) {
+		t.Fatalf("GetOwnedResult() expired error = %v, want expired", err)
+	}
+}
+
 func TestImageJobResponseUsesStableResultURLs(t *testing.T) {
 	started := time.Unix(1_700_000_001, 0).UTC()
 	job := &ImageJob{

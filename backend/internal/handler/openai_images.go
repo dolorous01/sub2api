@@ -90,13 +90,6 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		h.errorResponse(c, contentModerationStatus(decision), contentModerationErrorCode(decision), decision.Message)
 		return
 	}
-	imageReleaseFunc, acquired := h.acquireImageGenerationSlot(c, streamStarted)
-	if !acquired {
-		return
-	}
-	if imageReleaseFunc != nil {
-		defer imageReleaseFunc()
-	}
 
 	if parsed.Multipart {
 		setOpsRequestContext(c, requestModel, parsed.Stream)
@@ -114,15 +107,6 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 
 	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
-	routingStart := time.Now()
-
-	userReleaseFunc, acquired := h.acquireResponsesUserSlot(c, subject.UserID, subject.Concurrency, parsed.Stream, &streamStarted, reqLog)
-	if !acquired {
-		return
-	}
-	if userReleaseFunc != nil {
-		defer userReleaseFunc()
-	}
 
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 		reqLog.Info("openai.images.billing_eligibility_check_failed", zap.Error(err))
@@ -132,6 +116,26 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		}
 		h.handleStreamingAwareError(c, status, code, message, streamStarted)
 		return
+	}
+	if prefersRespondAsync(c.GetHeader("Prefer")) {
+		h.createImageJob(c, apiKey, subscription, parsed, nil, "batch", channelMapping)
+		return
+	}
+
+	imageReleaseFunc, acquired := h.acquireImageGenerationSlot(c, streamStarted)
+	if !acquired {
+		return
+	}
+	if imageReleaseFunc != nil {
+		defer imageReleaseFunc()
+	}
+	routingStart := time.Now()
+	userReleaseFunc, acquired := h.acquireResponsesUserSlot(c, subject.UserID, subject.Concurrency, parsed.Stream, &streamStarted, reqLog)
+	if !acquired {
+		return
+	}
+	if userReleaseFunc != nil {
+		defer userReleaseFunc()
 	}
 
 	sessionHash := h.gatewayService.GenerateExplicitSessionHash(c, body)

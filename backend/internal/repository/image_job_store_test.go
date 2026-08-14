@@ -396,6 +396,20 @@ func TestNewImageJobObjectStoreNormalizesDriver(t *testing.T) {
 	}
 }
 
+func TestProvideImageJobObjectStoreDoesNotInitializeStorageWhenDisabled(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Gateway.ImageJobs.Enabled = false
+	cfg.Gateway.ImageJobs.Storage.Driver = "s3"
+
+	store, err := ProvideImageJobObjectStore(cfg)
+	if err != nil {
+		t.Fatalf("ProvideImageJobObjectStore() error = %v", err)
+	}
+	if _, ok := store.(*disabledImageJobObjectStore); !ok {
+		t.Fatalf("ProvideImageJobObjectStore() = %T, want disabled store", store)
+	}
+}
+
 type fakeImageS3Client struct {
 	putInput    *s3.PutObjectInput
 	getInput    *s3.GetObjectInput
