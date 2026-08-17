@@ -241,11 +241,14 @@ type OpenAIForwardResult struct {
 	ServiceTier *string
 	// ReasoningEffort is extracted from request body (reasoning.effort) or derived from model suffix.
 	// Stored for usage records display; nil means not provided / not applicable.
-	ReasoningEffort    *string
-	Stream             bool
-	OpenAIWSMode       bool
-	ResponseHeaders    http.Header
-	Duration           time.Duration
+	ReasoningEffort *string
+	Stream          bool
+	OpenAIWSMode    bool
+	ResponseHeaders http.Header
+	Duration        time.Duration
+	// UpstreamLatencyMs is populated by the reusable image executor for ops
+	// accounting without coupling the executor to Gin.
+	UpstreamLatencyMs  int64
 	FirstTokenMs       *int
 	ClientDisconnect   bool
 	ImageCount         int

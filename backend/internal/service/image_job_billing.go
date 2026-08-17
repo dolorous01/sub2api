@@ -18,6 +18,8 @@ type ImageExecutionResult struct {
 	Forward        *OpenAIForwardResult
 	Account        *Account
 	ChannelMapping ChannelMappingResult
+	// RoutingLatencyMs covers account selection and slot acquisition.
+	RoutingLatencyMs int64
 }
 
 type ImageJobSettlementInput struct {

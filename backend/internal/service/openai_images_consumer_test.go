@@ -68,3 +68,25 @@ func TestConsumeOpenAIImagesResponsesSSEDecodesCompletedResults(t *testing.T) {
 	require.Equal(t, []byte("b"), sink.Results()[1].Data)
 	require.Equal(t, int64(1710000012), sink.Summary().CreatedAt)
 }
+
+func TestConsumeOpenAIImagesResponsesSSEDoesNotDuplicateOutputItemFallback(t *testing.T) {
+	service := &OpenAIGatewayService{cfg: &config.Config{}}
+	parsed := &OpenAIImagesRequest{Model: "gpt-image-2", N: 2, Stream: true}
+	sink := NewCollectingImageResultSink()
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader(
+			"data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"img-a\",\"type\":\"image_generation_call\",\"result\":\"YQ==\",\"output_format\":\"png\"}}\n\n" +
+				"data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"img-b\",\"type\":\"image_generation_call\",\"result\":\"YQ==\",\"output_format\":\"png\"}}\n\n" +
+				"data: {\"type\":\"response.completed\",\"response\":{\"output\":[{\"type\":\"image_generation_call\",\"result\":\"YQ==\",\"output_format\":\"png\"},{\"type\":\"image_generation_call\",\"result\":\"YQ==\",\"output_format\":\"png\"}]}}\n\n",
+		)),
+	}
+
+	result, err := service.consumeOpenAIImagesResponsesSSE(context.Background(), resp, parsed, sink)
+	require.NoError(t, err)
+	require.Equal(t, 2, result.ImageCount)
+	require.Len(t, sink.Results(), 2)
+	require.Equal(t, []byte("a"), sink.Results()[0].Data)
+	require.Equal(t, []byte("a"), sink.Results()[1].Data)
+}

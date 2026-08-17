@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -492,7 +493,9 @@ func (r *imageJobRepository) MarkTerminal(ctx context.Context, jobID int64, atte
 	if update.FinishedAt.IsZero() {
 		update.FinishedAt = time.Now().UTC()
 	}
-	update.ReservationStatus, update.SettlementStatus = terminalImageJobReservationState(update.Status, update.CompletedCount)
+	if strings.TrimSpace(update.ReservationStatus) == "" || strings.TrimSpace(update.SettlementStatus) == "" {
+		update.ReservationStatus, update.SettlementStatus = terminalImageJobReservationState(update.Status, update.CompletedCount)
+	}
 	var usage any
 	if len(update.Usage) > 0 {
 		if !json.Valid(update.Usage) {
@@ -718,7 +721,12 @@ func (r *imageJobRepository) MarkExpired(ctx context.Context, jobID int64, fromS
 	if !fromStatus.Terminal() || fromStatus == service.ImageJobStatusExpired {
 		return fmt.Errorf("%w: %s -> expired", service.ErrImageJobInvalidTransition, fromStatus)
 	}
-	result, err := r.db.ExecContext(ctx, `
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin image job expiration: %w", err)
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `
 		UPDATE image_jobs
 		SET status = 'expired',
 			reservation_status = CASE WHEN reservation_status = 'settled' THEN 'settled' ELSE 'released' END,
@@ -734,6 +742,15 @@ func (r *imageJobRepository) MarkExpired(ctx context.Context, jobID int64, fromS
 	}
 	if count != 1 {
 		return service.ErrImageJobConflict
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM image_job_results WHERE job_id = $1`, jobID); err != nil {
+		return fmt.Errorf("delete expired image job results: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM image_job_inputs WHERE job_id = $1`, jobID); err != nil {
+		return fmt.Errorf("delete expired image job inputs: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit image job expiration: %w", err)
 	}
 	return nil
 }

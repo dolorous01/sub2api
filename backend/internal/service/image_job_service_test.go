@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,6 +44,58 @@ func TestImageJobServiceCreateCleansUploadedInputsOnReplay(t *testing.T) {
 	}
 	if len(deps.store.deleted) != deletedBefore+1 {
 		t.Fatalf("deleted objects = %d, want %d", len(deps.store.deleted), deletedBefore+1)
+	}
+}
+
+func TestImageJobServiceCreateScopesUploadedInputsByAPIKeyID(t *testing.T) {
+	svc, deps := newImageJobServiceFixture()
+	input := deps.createInput("")
+	input.Parsed.Uploads = []OpenAIImagesUpload{{ContentType: "image/png", Data: []byte("image")}}
+
+	job, replayed, err := svc.Create(context.Background(), input)
+	if err != nil || replayed || job == nil {
+		t.Fatalf("Create() = %#v, %t, %v", job, replayed, err)
+	}
+	if deps.repo.lastCreate == nil || len(deps.repo.lastCreate.Inputs) != 1 || len(deps.repo.lastCreate.Request.Inputs) != 1 {
+		t.Fatalf("CreateReserved() inputs = %#v, request inputs = %#v", deps.repo.lastCreate.Inputs, deps.repo.lastCreate.Request.Inputs)
+	}
+	wantPrefix := fmt.Sprintf("image-jobs/%d/%s/inputs/", input.APIKey.ID, job.PublicID)
+	objectKey := deps.repo.lastCreate.Inputs[0].ObjectKey
+	if !strings.HasPrefix(objectKey, wantPrefix) {
+		t.Fatalf("input object key = %q, want prefix %q", objectKey, wantPrefix)
+	}
+	if deps.repo.lastCreate.Request.Inputs[0].ObjectKey != objectKey {
+		t.Fatalf("request input object key = %q, want %q", deps.repo.lastCreate.Request.Inputs[0].ObjectKey, objectKey)
+	}
+	if _, ok := deps.store.objects[objectKey]; !ok {
+		t.Fatalf("stored object %q is missing", objectKey)
+	}
+}
+
+func TestImageJobServiceCreateLabelsSequenceOperation(t *testing.T) {
+	svc, deps := newImageJobServiceFixture()
+	input := deps.createInput("")
+	input.Mode = "sequence"
+	input.Scenes = []string{"arrival", "return"}
+
+	job, replayed, err := svc.Create(context.Background(), input)
+	if err != nil || replayed || job == nil {
+		t.Fatalf("Create() = %#v, %t, %v", job, replayed, err)
+	}
+	if job.Operation != "sequence" || deps.repo.lastCreate == nil || deps.repo.lastCreate.Operation != "sequence" {
+		t.Fatalf("sequence operation = job %q, create %#v", job.Operation, deps.repo.lastCreate)
+	}
+}
+
+func TestImageJobServiceCreateRejectsInvalidSequenceScenes(t *testing.T) {
+	for _, scenes := range [][]string{{"only"}, {"first", ""}, {"a", "b", "c", "d", "e"}} {
+		svc, deps := newImageJobServiceFixture()
+		input := deps.createInput("")
+		input.Mode = "sequence"
+		input.Scenes = scenes
+		if _, _, err := svc.Create(context.Background(), input); !errors.Is(err, ErrImageJobInvalidRequest) {
+			t.Errorf("scenes %#v: Create() error = %v, want invalid request", scenes, err)
+		}
 	}
 }
 
@@ -204,7 +258,7 @@ func TestImageJobResponseUsesStableResultURLs(t *testing.T) {
 	}
 
 	response := job.ToResponse()
-	if response.ID != job.PublicID || response.Object != "image.job" || response.StartedAt == nil || *response.StartedAt != started.Unix() {
+	if response.ID != job.PublicID || response.Object != "image.job" || response.StatusURL != "/v1/images/jobs/imgjob_test" || response.StartedAt == nil || *response.StartedAt != started.Unix() {
 		t.Fatalf("ToResponse() metadata = %#v", response)
 	}
 	if len(response.Data) != 1 || response.Data[0].URL != "/v1/images/jobs/imgjob_test/results/1" {

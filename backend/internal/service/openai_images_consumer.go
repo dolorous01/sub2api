@@ -113,6 +113,9 @@ func (s *OpenAIGatewayService) consumeOpenAIImagesSSE(
 	createdAt := int64(0)
 	results := make([]ImageArtifact, 0, imageMaxInt(1, parsed.N))
 	seen := make(map[string]struct{})
+	pendingResponses := make([]ImageArtifact, 0, imageMaxInt(1, parsed.N))
+	pendingResponseSeen := make(map[string]struct{})
+	pendingResponseCounts := make(map[string]int)
 	var firstTokenMs *int
 	var terminalErr error
 	var terminalSeen bool
@@ -146,6 +149,36 @@ func (s *OpenAIGatewayService) consumeOpenAIImagesSSE(
 				}
 			}
 		}
+		if responses && eventType == "response.output_item.done" {
+			item, itemID, ok, err := extractOpenAIImageFromResponsesOutputItemDone(payload)
+			if err != nil {
+				terminalErr = err
+				return
+			}
+			if ok {
+				artifact, err := responseImageArtifact(len(pendingResponses), item, item)
+				if err != nil {
+					terminalErr = err
+					return
+				}
+				artifact.UpstreamOutputID = itemID
+				key := strings.TrimSpace(itemID)
+				if key == "" {
+					key = imageArtifactIdentity(artifact)
+				}
+				if _, exists := pendingResponseSeen[key]; !exists {
+					pendingResponseSeen[key] = struct{}{}
+					pendingResponses = append(pendingResponses, artifact)
+					pendingResponseCounts[imageArtifactContentIdentity(artifact)]++
+					if err := sink.Final(ctx, artifact); err != nil {
+						terminalErr = err
+						return
+					}
+					results = append(results, artifact)
+				}
+			}
+			return
+		}
 		artifacts, eventCreatedAt, eventUsage, err := imageArtifactsFromPayload(ctx, payload, parsed, responses)
 		if err != nil {
 			terminalErr = err
@@ -155,6 +188,21 @@ func (s *OpenAIGatewayService) consumeOpenAIImagesSSE(
 			createdAt = eventCreatedAt
 		}
 		mergeImageUsage(&usage, eventUsage)
+		if responses && eventType == "response.completed" {
+			filtered := artifacts[:0]
+			for _, artifact := range artifacts {
+				key := imageArtifactContentIdentity(artifact)
+				if pendingResponseCounts[key] > 0 {
+					pendingResponseCounts[key]--
+					continue
+				}
+				filtered = append(filtered, artifact)
+			}
+			artifacts = filtered
+			pendingResponses = nil
+			pendingResponseSeen = nil
+			pendingResponseCounts = nil
+		}
 		for _, artifact := range artifacts {
 			key := imageArtifactIdentity(artifact)
 			if key != "" {
@@ -473,6 +521,14 @@ func imageArtifactIdentity(artifact ImageArtifact) string {
 	}
 	sum := sha256.Sum256(artifact.Data)
 	return fmt.Sprintf("%d:%s:%s", artifact.Index, strings.TrimSpace(artifact.OutputFormat), hex.EncodeToString(sum[:]))
+}
+
+func imageArtifactContentIdentity(artifact ImageArtifact) string {
+	if len(artifact.Data) == 0 {
+		return ""
+	}
+	sum := sha256.Sum256(artifact.Data)
+	return strings.TrimSpace(artifact.OutputFormat) + ":" + hex.EncodeToString(sum[:])
 }
 
 func imageMaxInt(left, right int) int {

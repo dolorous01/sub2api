@@ -62,3 +62,26 @@ func TestImageJobRepositoryMarkTerminalRejectsNonTerminalStatus(t *testing.T) {
 		t.Fatalf("MarkTerminal() error = %v, want ErrImageJobInvalidTransition", err)
 	}
 }
+
+func TestImageJobRepositoryMarkExpiredClearsResourceMetadataInTransaction(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := NewImageJobRepository(nil, db)
+	expiredAt := time.Unix(1_800_000_100, 0).UTC()
+
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("UPDATE image_jobs")).
+		WithArgs(int64(42), string(service.ImageJobStatusCompleted), expiredAt).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM image_job_results WHERE job_id = $1")).
+		WithArgs(int64(42)).WillReturnResult(sqlmock.NewResult(0, 4))
+	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM image_job_inputs WHERE job_id = $1")).
+		WithArgs(int64(42)).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectCommit()
+
+	if err := repo.MarkExpired(context.Background(), 42, service.ImageJobStatusCompleted, expiredAt); err != nil {
+		t.Fatalf("MarkExpired() error = %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("SQL expectations: %v", err)
+	}
+}

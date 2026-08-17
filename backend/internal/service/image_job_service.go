@@ -31,6 +31,7 @@ type ImageJobResponse struct {
 	ID             string                   `json:"id"`
 	Object         string                   `json:"object"`
 	Status         ImageJobStatus           `json:"status"`
+	StatusURL      string                   `json:"status_url"`
 	Operation      string                   `json:"operation"`
 	Mode           string                   `json:"mode,omitempty"`
 	Model          string                   `json:"model"`
@@ -53,19 +54,65 @@ type ImageJobResultResponse struct {
 }
 
 type ImageJobService struct {
-	repo    ImageJobRepository
-	store   ImageJobObjectStore
-	billing *ImageJobBilling
-	cfg     *config.Config
+	repo          ImageJobRepository
+	store         ImageJobObjectStore
+	executor      ImageExecutor
+	apiKeys       ImageJobAPIKeyProvider
+	subscriptions ImageJobSubscriptionProvider
+	billing       *ImageJobBilling
+	cfg           *config.Config
+	metrics       *ImageJobMetrics
+	worker        *ImageJobWorker
 }
 
 func NewImageJobService(
 	repo ImageJobRepository,
 	store ImageJobObjectStore,
-	billing *ImageJobBilling,
-	cfg *config.Config,
+	dependencies ...any,
 ) *ImageJobService {
-	return &ImageJobService{repo: repo, store: store, billing: billing, cfg: cfg}
+	service := &ImageJobService{repo: repo, store: store}
+	for _, dependency := range dependencies {
+		switch value := dependency.(type) {
+		case ImageExecutor:
+			service.executor = value
+		case ImageJobAPIKeyProvider:
+			service.apiKeys = value
+		case ImageJobSubscriptionProvider:
+			service.subscriptions = value
+		case *ImageJobBilling:
+			service.billing = value
+		case *config.Config:
+			service.cfg = value
+		case *ImageJobMetrics:
+			service.metrics = value
+		}
+	}
+	if service.metrics == nil {
+		service.metrics = &ImageJobMetrics{}
+	}
+	if service.executor != nil && service.apiKeys != nil && service.billing != nil && service.cfg != nil {
+		service.worker = NewImageJobWorker(repo, store, service.executor, service.apiKeys, service.subscriptions, service.billing, service.cfg, service.metrics)
+	}
+	return service
+}
+
+func (s *ImageJobService) Start() {
+	if s != nil && s.worker != nil {
+		s.worker.Start()
+	}
+}
+
+func (s *ImageJobService) Stop() {
+	if s != nil && s.worker != nil {
+		s.worker.Stop()
+	}
+}
+
+func (s *ImageJobService) MetricsSnapshot() ImageJobMetricsSnapshot {
+	if s == nil || s.metrics == nil {
+		return ImageJobMetricsSnapshot{}
+	}
+	return s.metrics.Snapshot()
 }
 
 func NewImageJobPublicID() string {
@@ -98,17 +145,43 @@ func (s *ImageJobService) Create(ctx context.Context, input CreateImageJobInput)
 	if mode != "batch" && mode != "sequence" {
 		return nil, false, fmt.Errorf("%w: mode must be batch or sequence", ErrImageJobInvalidRequest)
 	}
+	scenes := append([]string(nil), input.Scenes...)
+	if mode == "sequence" {
+		if len(scenes) < 2 || len(scenes) > 4 {
+			return nil, false, fmt.Errorf("%w: sequence requires between 2 and 4 scenes", ErrImageJobInvalidRequest)
+		}
+		for index := range scenes {
+			scenes[index] = strings.TrimSpace(scenes[index])
+			if scenes[index] == "" {
+				return nil, false, fmt.Errorf("%w: scene %d must not be empty", ErrImageJobInvalidRequest, index)
+			}
+		}
+	}
 	idempotencyHash, err := imageJobIdempotencyHash(input.APIKey.ID, input.IdempotencyKey)
 	if err != nil {
 		return nil, false, err
 	}
 
 	publicID := NewImageJobPublicID()
+	objectSuffix := fmt.Sprintf("%d/%s", input.APIKey.ID, publicID)
 	request, inputs, uploads, digest, err := prepareImageJobRequest(
-		publicID, input.Parsed, input.Scenes, s.cfg.Gateway.ImageJobs.MaxInputImages,
+		objectSuffix, input.Parsed, scenes, s.cfg.Gateway.ImageJobs.MaxInputImages,
 	)
 	if err != nil {
 		return nil, false, fmt.Errorf("%w: %v", ErrImageJobInvalidRequest, err)
+	}
+	if mode == "sequence" {
+		referenceCount := len(request.Inputs) + len(request.InputURLs)
+		requiredFrameInputs := referenceCount + 1
+		if requiredFrameInputs < 2 {
+			requiredFrameInputs = 2
+		}
+		if requiredFrameInputs > s.cfg.Gateway.ImageJobs.MaxInputImages {
+			return nil, false, fmt.Errorf("%w: sequence frames require at least %d inputs, maximum is %d", ErrImageJobInvalidRequest, requiredFrameInputs, s.cfg.Gateway.ImageJobs.MaxInputImages)
+		}
+		if request.Mask != nil || strings.TrimSpace(request.MaskURL) != "" {
+			return nil, false, fmt.Errorf("%w: sequence requests do not support masks", ErrImageJobInvalidRequest)
+		}
 	}
 	requestedCount := request.N
 	if len(request.Scenes) > 0 {
@@ -141,9 +214,13 @@ func (s *ImageJobService) Create(ctx context.Context, input CreateImageJobInput)
 		mappedModel = request.Model
 	}
 	now := timezone.Now()
+	operation := imageJobOperation(request.Endpoint)
+	if mode == "sequence" {
+		operation = "sequence"
+	}
 	create := &ImageJobCreate{
 		PublicID: publicID, UserID: input.APIKey.UserID, APIKeyID: input.APIKey.ID, GroupID: *input.APIKey.GroupID,
-		Endpoint: request.Endpoint, Operation: imageJobOperation(request.Endpoint), Mode: mode,
+		Endpoint: request.Endpoint, Operation: operation, Mode: mode,
 		RequestedModel: request.Model, MappedModel: mappedModel, RequestedCount: requestedCount,
 		Request: request, RequestDigest: digest, IdempotencyKeyHash: idempotencyHash,
 		ReservedUSD: reservation.AmountUSD, ReservationBillingType: reservation.BillingType,
@@ -162,6 +239,9 @@ func (s *ImageJobService) Create(ctx context.Context, input CreateImageJobInput)
 			return nil, false, cleanupErr
 		}
 		return job, true, nil
+	}
+	if s.metrics != nil {
+		s.metrics.JobCreated(mode)
 	}
 	return job, false, nil
 }
@@ -244,7 +324,8 @@ func (job *ImageJob) ToResponse() ImageJobResponse {
 		return ImageJobResponse{}
 	}
 	response := ImageJobResponse{
-		ID: job.PublicID, Object: "image.job", Status: job.Status, Operation: job.Operation, Mode: job.Mode,
+		ID: job.PublicID, Object: "image.job", Status: job.Status,
+		StatusURL: fmt.Sprintf("/v1/images/jobs/%s", job.PublicID), Operation: job.Operation, Mode: job.Mode,
 		Model: job.RequestedModel, RequestedCount: job.RequestedCount, CompletedCount: job.CompletedCount,
 		Error: job.Error, CreatedAt: job.CreatedAt.Unix(), ExpiresAt: job.ExpiresAt.Unix(),
 		Data: make([]ImageJobResultResponse, 0, len(job.Results)),

@@ -74,6 +74,9 @@ func BuildOpenAIImagesRequest(
 	if endpoint == "" {
 		return nil, "", nil, fmt.Errorf("unsupported images endpoint")
 	}
+	if endpoint == openAIImagesEditsEndpoint && strings.TrimSpace(req.InputFidelity) == "" {
+		req.InputFidelity = "high"
+	}
 	if endpoint != openAIImagesEditsEndpoint && (len(req.Inputs) > 0 || req.Mask != nil || len(req.InputURLs) > 0 || req.MaskURL != "") {
 		return nil, "", nil, fmt.Errorf("image inputs require the edits endpoint")
 	}
@@ -121,7 +124,7 @@ func buildImageJobMultipartRequest(ctx context.Context, store ImageJobObjectStor
 		if fieldName == "" {
 			fieldName = "image"
 		}
-		if fieldName != "image" && !strings.HasPrefix(fieldName, "image[") {
+		if fieldName != "image" && fieldName != "image[]" {
 			return closeWithError(fmt.Errorf("invalid image input field name %q", fieldName))
 		}
 		data, contentType, extension, err := loadImageJobInput(ctx, store, ref)

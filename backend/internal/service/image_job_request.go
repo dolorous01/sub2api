@@ -58,7 +58,17 @@ func prepareImageJobRequest(
 	if len(parsed.Uploads)+len(parsed.InputImageURLs) > maxInputs {
 		return ImageJobRequest{}, nil, nil, "", fmt.Errorf("image request has %d inputs, maximum is %d", len(parsed.Uploads)+len(parsed.InputImageURLs), maxInputs)
 	}
+	if len(parsed.Uploads) > 0 && (len(parsed.InputImageURLs) > 0 || strings.TrimSpace(parsed.MaskImageURL) != "") {
+		return ImageJobRequest{}, nil, nil, "", fmt.Errorf("stored image inputs cannot be combined with URL image inputs")
+	}
+	if parsed.MaskUpload != nil && (len(parsed.InputImageURLs) > 0 || strings.TrimSpace(parsed.MaskImageURL) != "") {
+		return ImageJobRequest{}, nil, nil, "", fmt.Errorf("stored mask cannot be combined with URL image inputs")
+	}
 
+	inputFidelity := parsed.InputFidelity
+	if normalizeOpenAIImagesEndpointPath(parsed.Endpoint) == openAIImagesEditsEndpoint && strings.TrimSpace(inputFidelity) == "" {
+		inputFidelity = "high"
+	}
 	normalized := ImageJobRequest{
 		Endpoint:          parsed.Endpoint,
 		Model:             parsed.Model,
@@ -71,7 +81,7 @@ func prepareImageJobRequest(
 		OutputFormat:      parsed.OutputFormat,
 		OutputCompression: cloneIntPointer(parsed.OutputCompression),
 		Moderation:        parsed.Moderation,
-		InputFidelity:     parsed.InputFidelity,
+		InputFidelity:     inputFidelity,
 		Style:             parsed.Style,
 		PartialImages:     cloneIntPointer(parsed.PartialImages),
 		InputURLs:         append([]string(nil), parsed.InputImageURLs...),
@@ -84,6 +94,10 @@ func prepareImageJobRequest(
 	uploads := make([]preparedImageJobUpload, 0, len(parsed.Uploads)+1)
 
 	for index, upload := range parsed.Uploads {
+		fieldName := strings.TrimSpace(upload.FieldName)
+		if fieldName != "" && fieldName != "image" && fieldName != "image[]" {
+			return ImageJobRequest{}, nil, nil, "", fmt.Errorf("invalid image input field name %q", fieldName)
+		}
 		ref, input, prepared, err := prepareImageJobUpload(prefix, "image", index, upload)
 		if err != nil {
 			return ImageJobRequest{}, nil, nil, "", err
