@@ -37,6 +37,8 @@ type OpenAIGatewayHandler struct {
 	opsService               *service.OpsService
 	concurrencyHelper        *ConcurrencyHelper
 	imageLimiter             *imageConcurrencyLimiter
+	imageExecutor            service.ImageExecutor
+	imageJobs                imageJobService
 	maxAccountSwitches       int
 	cfg                      *config.Config
 }
@@ -124,6 +126,8 @@ func NewOpenAIGatewayHandler(
 	errorPassthroughService *service.ErrorPassthroughService,
 	contentModerationService *service.ContentModerationService,
 	opsService *service.OpsService,
+	imageExecutor *service.OpenAIImageExecutor,
+	imageJobs *service.ImageJobService,
 	cfg *config.Config,
 ) *OpenAIGatewayHandler {
 	pingInterval := time.Duration(0)
@@ -134,6 +138,9 @@ func NewOpenAIGatewayHandler(
 			maxAccountSwitches = cfg.Gateway.MaxAccountSwitches
 		}
 	}
+	if imageExecutor == nil {
+		imageExecutor = service.NewOpenAIImageExecutor(gatewayService, concurrencyService, cfg)
+	}
 	return &OpenAIGatewayHandler{
 		gatewayService:           gatewayService,
 		billingCacheService:      billingCacheService,
@@ -142,8 +149,10 @@ func NewOpenAIGatewayHandler(
 		errorPassthroughService:  errorPassthroughService,
 		contentModerationService: contentModerationService,
 		opsService:               opsService,
+		imageJobs:                imageJobs,
 		concurrencyHelper:        NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
 		imageLimiter:             &imageConcurrencyLimiter{},
+		imageExecutor:            imageExecutor,
 		maxAccountSwitches:       maxAccountSwitches,
 		cfg:                      cfg,
 	}
@@ -1805,7 +1814,18 @@ func (h *OpenAIGatewayHandler) submitMandatoryUsageRecordTask(parent context.Con
 }
 
 func (h *OpenAIGatewayHandler) acquireImageGenerationSlot(c *gin.Context, streamStarted bool) (func(), bool) {
-	if h == nil || h.cfg == nil || h.imageLimiter == nil {
+	if h == nil || h.cfg == nil {
+		return nil, true
+	}
+	if h.imageExecutor != nil {
+		release, err := h.imageExecutor.AcquireImageSlot(c.Request.Context())
+		if err == nil {
+			return release, true
+		}
+		h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "Image generation concurrency limit exceeded, please retry later", streamStarted)
+		return nil, false
+	}
+	if h.imageLimiter == nil {
 		return nil, true
 	}
 	imageConcurrency := h.cfg.Gateway.ImageConcurrency

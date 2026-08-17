@@ -125,6 +125,20 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	requireColumn(t, tx, "user_allowed_groups", "created_at", "timestamp with time zone", 0, false)
 }
 
+func TestMigrationsCreateImageJobTables(t *testing.T) {
+	tx := testTx(t)
+
+	for _, table := range []string{"image_jobs", "image_job_inputs", "image_job_results"} {
+		var got string
+		require.NoError(t, tx.QueryRow(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name=$1`, table).Scan(&got))
+		require.Equal(t, table, got)
+	}
+
+	requireIndex(t, tx, "image_jobs", "idx_image_jobs_api_key_idempotency")
+	requireIndex(t, tx, "image_jobs", "idx_image_jobs_claim")
+	requireIndex(t, tx, "image_job_results", "idx_image_job_results_job_index")
+}
+
 func TestMigrationsRunner_AuthIdentityAndPaymentSchemaStayAligned(t *testing.T) {
 	tx := testTx(t)
 

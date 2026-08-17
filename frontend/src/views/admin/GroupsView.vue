@@ -1145,6 +1145,21 @@
           </div>
         </div>
 
+        <!-- OpenAI 自动兜底分组 -->
+        <div v-if="createForm.platform === 'openai'" class="border-t pt-4">
+          <label class="input-label">{{
+            t("admin.groups.openaiFallback.title")
+          }}</label>
+          <Select
+            v-model="createForm.fallback_group_id"
+            :options="fallbackGroupOptions"
+            :placeholder="t('admin.groups.openaiFallback.noFallback')"
+          />
+          <p class="input-hint">
+            {{ t("admin.groups.openaiFallback.hint") }}
+          </p>
+        </div>
+
         <!-- OpenAI Messages 调度配置（仅 openai 平台） -->
         <div
           v-if="createForm.platform === 'openai'"
@@ -2480,6 +2495,21 @@
           </div>
         </div>
 
+        <!-- OpenAI 自动兜底分组 -->
+        <div v-if="editForm.platform === 'openai'" class="border-t pt-4">
+          <label class="input-label">{{
+            t("admin.groups.openaiFallback.title")
+          }}</label>
+          <Select
+            v-model="editForm.fallback_group_id"
+            :options="fallbackGroupOptionsForEdit"
+            :placeholder="t('admin.groups.openaiFallback.noFallback')"
+          />
+          <p class="input-hint">
+            {{ t("admin.groups.openaiFallback.hint") }}
+          </p>
+        </div>
+
         <!-- OpenAI Messages 调度配置（仅 openai 平台） -->
         <div
           v-if="editForm.platform === 'openai'"
@@ -3372,16 +3402,29 @@ const subscriptionTypeOptions = computed(() => [
   { value: "subscription", label: t("admin.groups.subscription.subscription") },
 ]);
 
-// 降级分组选项（创建时）- 仅包含 anthropic 平台且未启用 claude_code_only 的分组
+const fallbackOptionPlatform = (platform: string) =>
+  platform === "openai" ? "openai" : "anthropic";
+
+const fallbackNoneLabel = (platform: string) =>
+  platform === "openai"
+    ? t("admin.groups.openaiFallback.noFallback")
+    : t("admin.groups.claudeCode.noFallback");
+
+const isFallbackGroupCandidate = (g: AdminGroup, platform: string) => {
+  const targetPlatform = fallbackOptionPlatform(platform);
+  if (g.platform !== targetPlatform || g.status !== "active") {
+    return false;
+  }
+  return targetPlatform !== "anthropic" || !g.claude_code_only;
+};
+
+// 降级/兜底分组选项（创建时）- Claude 使用 Anthropic 候选，OpenAI 使用 OpenAI 候选
 const fallbackGroupOptions = computed(() => {
   const options: { value: number | null; label: string }[] = [
-    { value: null, label: t("admin.groups.claudeCode.noFallback") },
+    { value: null, label: fallbackNoneLabel(createForm.platform) },
   ];
-  const eligibleGroups = groups.value.filter(
-    (g) =>
-      g.platform === "anthropic" &&
-      !g.claude_code_only &&
-      g.status === "active",
+  const eligibleGroups = groups.value.filter((g) =>
+    isFallbackGroupCandidate(g, createForm.platform),
   );
   eligibleGroups.forEach((g) => {
     options.push({ value: g.id, label: g.name });
@@ -3389,17 +3432,15 @@ const fallbackGroupOptions = computed(() => {
   return options;
 });
 
-// 降级分组选项（编辑时）- 排除自身
+// 降级/兜底分组选项（编辑时）- 排除自身
 const fallbackGroupOptionsForEdit = computed(() => {
   const options: { value: number | null; label: string }[] = [
-    { value: null, label: t("admin.groups.claudeCode.noFallback") },
+    { value: null, label: fallbackNoneLabel(editForm.platform) },
   ];
   const currentId = editingGroup.value?.id;
   const eligibleGroups = groups.value.filter(
     (g) =>
-      g.platform === "anthropic" &&
-      !g.claude_code_only &&
-      g.status === "active" &&
+      isFallbackGroupCandidate(g, editForm.platform) &&
       g.id !== currentId,
   );
   eligibleGroups.forEach((g) => {
@@ -4517,6 +4558,7 @@ watch(
 watch(
   () => createForm.platform,
   (newVal) => {
+    createForm.fallback_group_id = null;
     if (!["anthropic", "antigravity"].includes(newVal)) {
       createForm.fallback_group_id_on_invalid_request = null;
     }
@@ -4535,6 +4577,9 @@ watch(
 watch(
   () => editForm.platform,
   (newVal) => {
+    if (editingGroup.value && newVal !== editingGroup.value.platform) {
+      editForm.fallback_group_id = null;
+    }
     if (!["anthropic", "antigravity"].includes(newVal)) {
       editForm.fallback_group_id_on_invalid_request = null;
     }

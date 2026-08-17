@@ -241,11 +241,14 @@ type OpenAIForwardResult struct {
 	ServiceTier *string
 	// ReasoningEffort is extracted from request body (reasoning.effort) or derived from model suffix.
 	// Stored for usage records display; nil means not provided / not applicable.
-	ReasoningEffort    *string
-	Stream             bool
-	OpenAIWSMode       bool
-	ResponseHeaders    http.Header
-	Duration           time.Duration
+	ReasoningEffort *string
+	Stream          bool
+	OpenAIWSMode    bool
+	ResponseHeaders http.Header
+	Duration        time.Duration
+	// UpstreamLatencyMs is populated by the reusable image executor for ops
+	// accounting without coupling the executor to Gin.
+	UpstreamLatencyMs  int64
 	FirstTokenMs       *int
 	ClientDisconnect   bool
 	ImageCount         int
@@ -336,6 +339,7 @@ var ErrNoAvailableCompactAccounts = errors.New("no available OpenAI accounts sup
 // OpenAIGatewayService handles OpenAI API gateway operations
 type OpenAIGatewayService struct {
 	accountRepo           AccountRepository
+	groupRepo             GroupRepository
 	usageLogRepo          UsageLogRepository
 	usageBillingRepo      UsageBillingRepository
 	userRepo              UserRepository
@@ -385,6 +389,7 @@ type OpenAIGatewayService struct {
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
 func NewOpenAIGatewayService(
 	accountRepo AccountRepository,
+	groupRepo GroupRepository,
 	usageLogRepo UsageLogRepository,
 	usageBillingRepo UsageBillingRepository,
 	userRepo UserRepository,
@@ -409,6 +414,7 @@ func NewOpenAIGatewayService(
 ) *OpenAIGatewayService {
 	svc := &OpenAIGatewayService{
 		accountRepo:         accountRepo,
+		groupRepo:           groupRepo,
 		usageLogRepo:        usageLogRepo,
 		usageBillingRepo:    usageBillingRepo,
 		userRepo:            userRepo,
@@ -1368,7 +1374,85 @@ func (s *OpenAIGatewayService) SelectAccountForModel(ctx context.Context, groupI
 // SelectAccountForModelWithExclusions selects an account supporting the requested model while excluding specified accounts.
 // SelectAccountForModelWithExclusions 选择支持指定模型的账号，同时排除指定的账号。
 func (s *OpenAIGatewayService) SelectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*Account, error) {
-	return s.selectAccountForModelWithExclusions(s.withOpenAIQuotaAutoPauseContext(ctx), groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, 0, "")
+	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
+	groupIDs, err := s.resolveOpenAIAccountFallbackGroupIDs(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if len(groupIDs) == 0 {
+		return s.selectAccountForModelWithExclusions(ctx, nil, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, 0, "")
+	}
+
+	var lastErr error
+	for i, candidateID := range groupIDs {
+		candidateGroupID := candidateID
+		account, err := s.selectAccountForModelWithExclusions(ctx, &candidateGroupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, 0, "")
+		if err == nil {
+			if i > 0 {
+				slog.Info("openai_account_fallback_group_selected",
+					"original_group_id", groupIDs[0],
+					"fallback_group_id", candidateGroupID,
+					"account_id", account.ID,
+					"model", requestedModel,
+				)
+			}
+			return account, nil
+		}
+		lastErr = err
+		if i == len(groupIDs)-1 || !shouldTryOpenAIAccountFallback(err) {
+			return nil, err
+		}
+		slog.Warn("openai_account_fallback_group_try_next",
+			"group_id", candidateGroupID,
+			"next_group_id", groupIDs[i+1],
+			"model", requestedModel,
+			"error", err,
+		)
+	}
+	return nil, lastErr
+}
+
+func (s *OpenAIGatewayService) resolveOpenAIAccountFallbackGroupIDs(ctx context.Context, groupID *int64) ([]int64, error) {
+	if groupID == nil {
+		return nil, nil
+	}
+	if s == nil || s.groupRepo == nil {
+		return []int64{*groupID}, nil
+	}
+
+	currentID := *groupID
+	visited := map[int64]struct{}{}
+	groupIDs := make([]int64, 0, 2)
+	for {
+		if _, seen := visited[currentID]; seen {
+			return nil, fmt.Errorf("fallback group cycle detected")
+		}
+		visited[currentID] = struct{}{}
+		groupIDs = append(groupIDs, currentID)
+
+		group, err := s.groupRepo.GetByIDLite(ctx, currentID)
+		if err != nil {
+			return nil, err
+		}
+		if group == nil || group.FallbackGroupID == nil || *group.FallbackGroupID <= 0 {
+			return groupIDs, nil
+		}
+		currentID = *group.FallbackGroupID
+	}
+}
+
+func shouldTryOpenAIAccountFallback(err error) bool {
+	if err == nil {
+		return false
+	}
+	if strings.Contains(err.Error(), "channel pricing restriction") {
+		return false
+	}
+	if errors.Is(err, ErrNoAvailableAccounts) || errors.Is(err, ErrNoAvailableCompactAccounts) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "no available OpenAI accounts")
 }
 
 // noAvailableOpenAISelectionError builds the standard "no account available" error
@@ -1993,7 +2077,42 @@ func (s *OpenAIGatewayService) isBetterAccount(candidate, current *Account) bool
 
 // SelectAccountWithLoadAwareness selects an account with load-awareness and wait plan.
 func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
-	return s.selectAccountWithLoadAwareness(s.withOpenAIQuotaAutoPauseContext(ctx), groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, "")
+	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
+	groupIDs, err := s.resolveOpenAIAccountFallbackGroupIDs(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if len(groupIDs) == 0 {
+		return s.selectAccountWithLoadAwareness(ctx, nil, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, "")
+	}
+
+	var lastErr error
+	for i, candidateID := range groupIDs {
+		candidateGroupID := candidateID
+		selection, err := s.selectAccountWithLoadAwareness(ctx, &candidateGroupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, "")
+		if err == nil {
+			if i > 0 && selection != nil && selection.Account != nil {
+				slog.Info("openai_account_fallback_group_selected",
+					"original_group_id", groupIDs[0],
+					"fallback_group_id", candidateGroupID,
+					"account_id", selection.Account.ID,
+					"model", requestedModel,
+				)
+			}
+			return selection, nil
+		}
+		lastErr = err
+		if i == len(groupIDs)-1 || !shouldTryOpenAIAccountFallback(err) {
+			return nil, err
+		}
+		slog.Warn("openai_account_fallback_group_try_next",
+			"group_id", candidateGroupID,
+			"next_group_id", groupIDs[i+1],
+			"model", requestedModel,
+			"error", err,
+		)
+	}
+	return nil, lastErr
 }
 
 func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability) (*AccountSelectionResult, error) {
@@ -6247,18 +6366,21 @@ func (s *OpenAIGatewayService) replaceModelInResponseBody(body []byte, fromModel
 
 // OpenAIRecordUsageInput input for recording usage
 type OpenAIRecordUsageInput struct {
-	Result             *OpenAIForwardResult
-	APIKey             *APIKey
-	User               *User
-	Account            *Account
-	Subscription       *UserSubscription
-	InboundEndpoint    string
-	UpstreamEndpoint   string
-	UserAgent          string // 请求的 User-Agent
-	IPAddress          string // 请求的客户端 IP 地址
-	RequestPayloadHash string
-	APIKeyService      APIKeyQuotaUpdater
-	QuotaPlatform      string // user×platform quota platform resolved by the handler before async billing.
+	Result                *OpenAIForwardResult
+	APIKey                *APIKey
+	User                  *User
+	Account               *Account
+	Subscription          *UserSubscription
+	InboundEndpoint       string
+	UpstreamEndpoint      string
+	UserAgent             string // 请求的 User-Agent
+	IPAddress             string // 请求的客户端 IP 地址
+	BillingRequestID      string // Optional stable billing idempotency key for internally replayed work.
+	BillingType           *int8  // Optional persisted billing pool override for internally replayed work.
+	BillingSubscriptionID *int64
+	RequestPayloadHash    string
+	APIKeyService         APIKeyQuotaUpdater
+	QuotaPlatform         string // user×platform quota platform resolved by the handler before async billing.
 	// CyberBlocked 为 true 时把该用量行标记为 cyber（request_type=cyber），计费逻辑不变。
 	CyberBlocked bool
 	ChannelUsageFields
@@ -6327,12 +6449,18 @@ func (s *OpenAIGatewayService) RecordCyberPolicyUsageLog(ctx context.Context, in
 
 // RecordUsage records usage and deducts balance
 func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRecordUsageInput) error {
+	_, err := s.RecordUsageWithCost(ctx, input)
+	return err
+}
+
+// RecordUsageWithCost records usage, deducts balance, and returns the resolved cost.
+func (s *OpenAIGatewayService) RecordUsageWithCost(ctx context.Context, input *OpenAIRecordUsageInput) (*CostBreakdown, error) {
 	if input == nil {
-		return errors.New("openai usage input is nil")
+		return nil, errors.New("openai usage input is nil")
 	}
 	result := input.Result
 	if result == nil {
-		return errors.New("openai usage result is nil")
+		return nil, errors.New("openai usage result is nil")
 	}
 	if s.rateLimitService != nil && input.Account != nil && input.Account.Platform == PlatformOpenAI {
 		s.rateLimitService.ResetOpenAI403Counter(ctx, input.Account.ID)
@@ -6342,6 +6470,24 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
+	billingType := BillingTypeBalance
+	if subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType() {
+		billingType = BillingTypeSubscription
+	}
+	if input.BillingType != nil {
+		billingType = *input.BillingType
+		switch billingType {
+		case BillingTypeBalance:
+			subscription = nil
+		case BillingTypeSubscription:
+			if input.BillingSubscriptionID == nil || *input.BillingSubscriptionID <= 0 {
+				return nil, errors.New("openai persisted subscription billing ID is required")
+			}
+			subscription = &UserSubscription{ID: *input.BillingSubscriptionID}
+		default:
+			return nil, fmt.Errorf("openai persisted billing type %d is invalid", billingType)
+		}
+	}
 	ApplyOpenAIImageBillingResolution(result)
 
 	// 计算实际的新输入token（减去缓存读取的token）
@@ -6404,7 +6550,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	cost, err = s.calculateOpenAIRecordUsageCost(ctx, result, apiKey, billingModels, multiplier, imageMultiplier, tokens, serviceTier)
 	if err != nil {
 		if !isUsagePricingUnavailableError(err) {
-			return err
+			return nil, err
 		}
 		logger.L().With(
 			zap.String("component", "service.openai_gateway"),
@@ -6419,17 +6565,17 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 
 	// Determine billing type
-	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
-	billingType := BillingTypeBalance
-	if isSubscriptionBilling {
-		billingType = BillingTypeSubscription
-	}
+	isSubscriptionBilling := billingType == BillingTypeSubscription
 
 	// Create usage log
 	durationMs := int(result.Duration.Milliseconds())
 	accountRateMultiplier := account.BillingRateMultiplier()
-	requestID := resolveUsageBillingRequestID(ctx, result.RequestID)
-	if result.OpenAIWSMode {
+	billingRequestID := strings.TrimSpace(input.BillingRequestID)
+	requestID := billingRequestID
+	if requestID == "" {
+		requestID = resolveUsageBillingRequestID(ctx, result.RequestID)
+	}
+	if billingRequestID == "" && result.OpenAIWSMode {
 		if upstreamRequestID := strings.TrimSpace(result.RequestID); upstreamRequestID != "" {
 			requestID = upstreamRequestID
 		}
@@ -6532,7 +6678,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 		logger.LegacyPrintf("service.openai_gateway", "[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
 		s.deferredService.ScheduleLastUsedUpdate(account.ID)
-		return nil
+		return cost, nil
 	}
 
 	// Async usage billing runs outside the original request context, so it
@@ -6559,11 +6705,11 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}()
 
 	if billingErr != nil {
-		return billingErr
+		return nil, billingErr
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 
-	return nil
+	return cost, nil
 }
 
 func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(

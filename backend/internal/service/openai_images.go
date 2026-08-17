@@ -4,9 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -179,48 +177,7 @@ func (s *OpenAIGatewayService) ParseOpenAIImagesRequest(c *gin.Context, body []b
 	if c == nil || c.Request == nil {
 		return nil, fmt.Errorf("missing request context")
 	}
-	endpoint := normalizeOpenAIImagesEndpointPath(c.Request.URL.Path)
-	if endpoint == "" {
-		return nil, fmt.Errorf("unsupported images endpoint")
-	}
-
-	contentType := strings.TrimSpace(c.GetHeader("Content-Type"))
-	req := &OpenAIImagesRequest{
-		Endpoint:    endpoint,
-		ContentType: contentType,
-		N:           1,
-		Body:        body,
-	}
-	if len(body) > 0 {
-		sum := sha256.Sum256(body)
-		req.bodyHash = hex.EncodeToString(sum[:8])
-	}
-
-	mediaType, _, err := mime.ParseMediaType(contentType)
-	if err == nil && strings.EqualFold(mediaType, "multipart/form-data") {
-		req.Multipart = true
-		if parseErr := parseOpenAIImagesMultipartRequest(body, contentType, req); parseErr != nil {
-			return nil, parseErr
-		}
-	} else {
-		if len(body) == 0 {
-			return nil, fmt.Errorf("request body is empty")
-		}
-		if !gjson.ValidBytes(body) {
-			return nil, fmt.Errorf("failed to parse request body")
-		}
-		if parseErr := parseOpenAIImagesJSONRequest(body, req); parseErr != nil {
-			return nil, parseErr
-		}
-	}
-
-	applyOpenAIImagesDefaults(req)
-	if err := validateOpenAIImagesModel(req.Model); err != nil {
-		return nil, err
-	}
-	req.SizeTier = normalizeOpenAIImageSizeTier(req.Size)
-	req.RequiredCapability = classifyOpenAIImagesCapability(req)
-	return req, nil
+	return ParseOpenAIImagesRequestBody(c.Request.URL.Path, c.GetHeader("Content-Type"), body)
 }
 
 func parseOpenAIImagesJSONRequest(body []byte, req *OpenAIImagesRequest) error {

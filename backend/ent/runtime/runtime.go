@@ -20,6 +20,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/imagejob"
+	"github.com/Wei-Shaw/sub2api/ent/imagejobinput"
+	"github.com/Wei-Shaw/sub2api/ent/imagejobresult"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
@@ -966,6 +969,158 @@ func init() {
 	identityadoptiondecisionDescDecidedAt := identityadoptiondecisionFields[4].Descriptor()
 	// identityadoptiondecision.DefaultDecidedAt holds the default value on creation for the decided_at field.
 	identityadoptiondecision.DefaultDecidedAt = identityadoptiondecisionDescDecidedAt.Default.(func() time.Time)
+	imagejobMixin := schema.ImageJob{}.Mixin()
+	imagejobMixinFields0 := imagejobMixin[0].Fields()
+	_ = imagejobMixinFields0
+	imagejobFields := schema.ImageJob{}.Fields()
+	_ = imagejobFields
+	// imagejobDescCreatedAt is the schema descriptor for created_at field.
+	imagejobDescCreatedAt := imagejobMixinFields0[0].Descriptor()
+	// imagejob.DefaultCreatedAt holds the default value on creation for the created_at field.
+	imagejob.DefaultCreatedAt = imagejobDescCreatedAt.Default.(func() time.Time)
+	// imagejobDescUpdatedAt is the schema descriptor for updated_at field.
+	imagejobDescUpdatedAt := imagejobMixinFields0[1].Descriptor()
+	// imagejob.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	imagejob.DefaultUpdatedAt = imagejobDescUpdatedAt.Default.(func() time.Time)
+	// imagejob.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	imagejob.UpdateDefaultUpdatedAt = imagejobDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// imagejobDescPublicID is the schema descriptor for public_id field.
+	imagejobDescPublicID := imagejobFields[0].Descriptor()
+	// imagejob.PublicIDValidator is a validator for the "public_id" field. It is called by the builders before save.
+	imagejob.PublicIDValidator = imagejobDescPublicID.Validators[0].(func(string) error)
+	// imagejobDescEndpoint is the schema descriptor for endpoint field.
+	imagejobDescEndpoint := imagejobFields[4].Descriptor()
+	// imagejob.EndpointValidator is a validator for the "endpoint" field. It is called by the builders before save.
+	imagejob.EndpointValidator = imagejobDescEndpoint.Validators[0].(func(string) error)
+	// imagejobDescOperation is the schema descriptor for operation field.
+	imagejobDescOperation := imagejobFields[5].Descriptor()
+	// imagejob.OperationValidator is a validator for the "operation" field. It is called by the builders before save.
+	imagejob.OperationValidator = imagejobDescOperation.Validators[0].(func(string) error)
+	// imagejobDescMode is the schema descriptor for mode field.
+	imagejobDescMode := imagejobFields[6].Descriptor()
+	// imagejob.ModeValidator is a validator for the "mode" field. It is called by the builders before save.
+	imagejob.ModeValidator = imagejobDescMode.Validators[0].(func(string) error)
+	// imagejobDescRequestedModel is the schema descriptor for requested_model field.
+	imagejobDescRequestedModel := imagejobFields[7].Descriptor()
+	// imagejob.RequestedModelValidator is a validator for the "requested_model" field. It is called by the builders before save.
+	imagejob.RequestedModelValidator = imagejobDescRequestedModel.Validators[0].(func(string) error)
+	// imagejobDescMappedModel is the schema descriptor for mapped_model field.
+	imagejobDescMappedModel := imagejobFields[8].Descriptor()
+	// imagejob.DefaultMappedModel holds the default value on creation for the mapped_model field.
+	imagejob.DefaultMappedModel = imagejobDescMappedModel.Default.(string)
+	// imagejob.MappedModelValidator is a validator for the "mapped_model" field. It is called by the builders before save.
+	imagejob.MappedModelValidator = imagejobDescMappedModel.Validators[0].(func(string) error)
+	// imagejobDescStatus is the schema descriptor for status field.
+	imagejobDescStatus := imagejobFields[9].Descriptor()
+	// imagejob.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	imagejob.StatusValidator = imagejobDescStatus.Validators[0].(func(string) error)
+	// imagejobDescCompletedCount is the schema descriptor for completed_count field.
+	imagejobDescCompletedCount := imagejobFields[11].Descriptor()
+	// imagejob.DefaultCompletedCount holds the default value on creation for the completed_count field.
+	imagejob.DefaultCompletedCount = imagejobDescCompletedCount.Default.(int)
+	// imagejobDescRequestDigest is the schema descriptor for request_digest field.
+	imagejobDescRequestDigest := imagejobFields[13].Descriptor()
+	// imagejob.RequestDigestValidator is a validator for the "request_digest" field. It is called by the builders before save.
+	imagejob.RequestDigestValidator = imagejobDescRequestDigest.Validators[0].(func(string) error)
+	// imagejobDescIdempotencyKeyHash is the schema descriptor for idempotency_key_hash field.
+	imagejobDescIdempotencyKeyHash := imagejobFields[14].Descriptor()
+	// imagejob.IdempotencyKeyHashValidator is a validator for the "idempotency_key_hash" field. It is called by the builders before save.
+	imagejob.IdempotencyKeyHashValidator = imagejobDescIdempotencyKeyHash.Validators[0].(func(string) error)
+	// imagejobDescReservedUsd is the schema descriptor for reserved_usd field.
+	imagejobDescReservedUsd := imagejobFields[15].Descriptor()
+	// imagejob.DefaultReservedUsd holds the default value on creation for the reserved_usd field.
+	imagejob.DefaultReservedUsd = imagejobDescReservedUsd.Default.(float64)
+	// imagejobDescReservationBillingType is the schema descriptor for reservation_billing_type field.
+	imagejobDescReservationBillingType := imagejobFields[16].Descriptor()
+	// imagejob.DefaultReservationBillingType holds the default value on creation for the reservation_billing_type field.
+	imagejob.DefaultReservationBillingType = imagejobDescReservationBillingType.Default.(int)
+	// imagejobDescReservationStatus is the schema descriptor for reservation_status field.
+	imagejobDescReservationStatus := imagejobFields[18].Descriptor()
+	// imagejob.DefaultReservationStatus holds the default value on creation for the reservation_status field.
+	imagejob.DefaultReservationStatus = imagejobDescReservationStatus.Default.(string)
+	// imagejob.ReservationStatusValidator is a validator for the "reservation_status" field. It is called by the builders before save.
+	imagejob.ReservationStatusValidator = imagejobDescReservationStatus.Validators[0].(func(string) error)
+	// imagejobDescSettlementStatus is the schema descriptor for settlement_status field.
+	imagejobDescSettlementStatus := imagejobFields[20].Descriptor()
+	// imagejob.DefaultSettlementStatus holds the default value on creation for the settlement_status field.
+	imagejob.DefaultSettlementStatus = imagejobDescSettlementStatus.Default.(string)
+	// imagejob.SettlementStatusValidator is a validator for the "settlement_status" field. It is called by the builders before save.
+	imagejob.SettlementStatusValidator = imagejobDescSettlementStatus.Validators[0].(func(string) error)
+	// imagejobDescAttemptID is the schema descriptor for attempt_id field.
+	imagejobDescAttemptID := imagejobFields[21].Descriptor()
+	// imagejob.AttemptIDValidator is a validator for the "attempt_id" field. It is called by the builders before save.
+	imagejob.AttemptIDValidator = imagejobDescAttemptID.Validators[0].(func(string) error)
+	// imagejobDescWorkerID is the schema descriptor for worker_id field.
+	imagejobDescWorkerID := imagejobFields[22].Descriptor()
+	// imagejob.WorkerIDValidator is a validator for the "worker_id" field. It is called by the builders before save.
+	imagejob.WorkerIDValidator = imagejobDescWorkerID.Validators[0].(func(string) error)
+	// imagejobDescExecutionPhase is the schema descriptor for execution_phase field.
+	imagejobDescExecutionPhase := imagejobFields[23].Descriptor()
+	// imagejob.DefaultExecutionPhase holds the default value on creation for the execution_phase field.
+	imagejob.DefaultExecutionPhase = imagejobDescExecutionPhase.Default.(string)
+	// imagejob.ExecutionPhaseValidator is a validator for the "execution_phase" field. It is called by the builders before save.
+	imagejob.ExecutionPhaseValidator = imagejobDescExecutionPhase.Validators[0].(func(string) error)
+	// imagejobDescErrorType is the schema descriptor for error_type field.
+	imagejobDescErrorType := imagejobFields[27].Descriptor()
+	// imagejob.ErrorTypeValidator is a validator for the "error_type" field. It is called by the builders before save.
+	imagejob.ErrorTypeValidator = imagejobDescErrorType.Validators[0].(func(string) error)
+	// imagejobDescErrorCode is the schema descriptor for error_code field.
+	imagejobDescErrorCode := imagejobFields[28].Descriptor()
+	// imagejob.ErrorCodeValidator is a validator for the "error_code" field. It is called by the builders before save.
+	imagejob.ErrorCodeValidator = imagejobDescErrorCode.Validators[0].(func(string) error)
+	// imagejobDescErrorRetryable is the schema descriptor for error_retryable field.
+	imagejobDescErrorRetryable := imagejobFields[30].Descriptor()
+	// imagejob.DefaultErrorRetryable holds the default value on creation for the error_retryable field.
+	imagejob.DefaultErrorRetryable = imagejobDescErrorRetryable.Default.(bool)
+	imagejobinputFields := schema.ImageJobInput{}.Fields()
+	_ = imagejobinputFields
+	// imagejobinputDescKind is the schema descriptor for kind field.
+	imagejobinputDescKind := imagejobinputFields[2].Descriptor()
+	// imagejobinput.KindValidator is a validator for the "kind" field. It is called by the builders before save.
+	imagejobinput.KindValidator = imagejobinputDescKind.Validators[0].(func(string) error)
+	// imagejobinputDescMimeType is the schema descriptor for mime_type field.
+	imagejobinputDescMimeType := imagejobinputFields[4].Descriptor()
+	// imagejobinput.MimeTypeValidator is a validator for the "mime_type" field. It is called by the builders before save.
+	imagejobinput.MimeTypeValidator = imagejobinputDescMimeType.Validators[0].(func(string) error)
+	// imagejobinputDescSha256 is the schema descriptor for sha256 field.
+	imagejobinputDescSha256 := imagejobinputFields[6].Descriptor()
+	// imagejobinput.Sha256Validator is a validator for the "sha256" field. It is called by the builders before save.
+	imagejobinput.Sha256Validator = imagejobinputDescSha256.Validators[0].(func(string) error)
+	// imagejobinputDescCreatedAt is the schema descriptor for created_at field.
+	imagejobinputDescCreatedAt := imagejobinputFields[7].Descriptor()
+	// imagejobinput.DefaultCreatedAt holds the default value on creation for the created_at field.
+	imagejobinput.DefaultCreatedAt = imagejobinputDescCreatedAt.Default.(func() time.Time)
+	imagejobresultMixin := schema.ImageJobResult{}.Mixin()
+	imagejobresultMixinFields0 := imagejobresultMixin[0].Fields()
+	_ = imagejobresultMixinFields0
+	imagejobresultFields := schema.ImageJobResult{}.Fields()
+	_ = imagejobresultFields
+	// imagejobresultDescCreatedAt is the schema descriptor for created_at field.
+	imagejobresultDescCreatedAt := imagejobresultMixinFields0[0].Descriptor()
+	// imagejobresult.DefaultCreatedAt holds the default value on creation for the created_at field.
+	imagejobresult.DefaultCreatedAt = imagejobresultDescCreatedAt.Default.(func() time.Time)
+	// imagejobresultDescUpdatedAt is the schema descriptor for updated_at field.
+	imagejobresultDescUpdatedAt := imagejobresultMixinFields0[1].Descriptor()
+	// imagejobresult.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	imagejobresult.DefaultUpdatedAt = imagejobresultDescUpdatedAt.Default.(func() time.Time)
+	// imagejobresult.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	imagejobresult.UpdateDefaultUpdatedAt = imagejobresultDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// imagejobresultDescStatus is the schema descriptor for status field.
+	imagejobresultDescStatus := imagejobresultFields[2].Descriptor()
+	// imagejobresult.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	imagejobresult.StatusValidator = imagejobresultDescStatus.Validators[0].(func(string) error)
+	// imagejobresultDescMimeType is the schema descriptor for mime_type field.
+	imagejobresultDescMimeType := imagejobresultFields[4].Descriptor()
+	// imagejobresult.MimeTypeValidator is a validator for the "mime_type" field. It is called by the builders before save.
+	imagejobresult.MimeTypeValidator = imagejobresultDescMimeType.Validators[0].(func(string) error)
+	// imagejobresultDescSizeTier is the schema descriptor for size_tier field.
+	imagejobresultDescSizeTier := imagejobresultFields[8].Descriptor()
+	// imagejobresult.SizeTierValidator is a validator for the "size_tier" field. It is called by the builders before save.
+	imagejobresult.SizeTierValidator = imagejobresultDescSizeTier.Validators[0].(func(string) error)
+	// imagejobresultDescUpstreamOutputID is the schema descriptor for upstream_output_id field.
+	imagejobresultDescUpstreamOutputID := imagejobresultFields[10].Descriptor()
+	// imagejobresult.UpstreamOutputIDValidator is a validator for the "upstream_output_id" field. It is called by the builders before save.
+	imagejobresult.UpstreamOutputIDValidator = imagejobresultDescUpstreamOutputID.Validators[0].(func(string) error)
 	paymentauditlogFields := schema.PaymentAuditLog{}.Fields()
 	_ = paymentauditlogFields
 	// paymentauditlogDescOrderID is the schema descriptor for order_id field.

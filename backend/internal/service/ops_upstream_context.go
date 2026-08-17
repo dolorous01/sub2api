@@ -173,6 +173,12 @@ func appendOpsUpstreamError(c *gin.Context, ev OpsUpstreamErrorEvent) {
 	checkSkipMonitoringForUpstreamEvent(c, &evCopy)
 }
 
+// AppendOpsUpstreamError records a framework request's upstream attempt. It is
+// exported for handler observers around framework-independent executors.
+func AppendOpsUpstreamError(c *gin.Context, ev OpsUpstreamErrorEvent) {
+	appendOpsUpstreamError(c, ev)
+}
+
 // checkSkipMonitoringForUpstreamEvent checks whether the upstream error event
 // matches a passthrough rule with skip_monitoring=true and, if so, sets the
 // OpsSkipPassthroughKey on the context.  This ensures intermediate retry /

@@ -27,6 +27,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
+	"github.com/Wei-Shaw/sub2api/ent/imagejob"
+	"github.com/Wei-Shaw/sub2api/ent/imagejobinput"
+	"github.com/Wei-Shaw/sub2api/ent/imagejobresult"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
@@ -75,6 +78,9 @@ const (
 	TypeGroup                         = "Group"
 	TypeIdempotencyRecord             = "IdempotencyRecord"
 	TypeIdentityAdoptionDecision      = "IdentityAdoptionDecision"
+	TypeImageJob                      = "ImageJob"
+	TypeImageJobInput                 = "ImageJobInput"
+	TypeImageJobResult                = "ImageJobResult"
 	TypePaymentAuditLog               = "PaymentAuditLog"
 	TypePaymentOrder                  = "PaymentOrder"
 	TypePaymentProviderInstance       = "PaymentProviderInstance"
@@ -20654,6 +20660,5136 @@ func (m *IdentityAdoptionDecisionMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown IdentityAdoptionDecision edge %s", name)
+}
+
+// ImageJobMutation represents an operation that mutates the ImageJob nodes in the graph.
+type ImageJobMutation struct {
+	config
+	op                             Op
+	typ                            string
+	id                             *int64
+	created_at                     *time.Time
+	updated_at                     *time.Time
+	public_id                      *string
+	endpoint                       *string
+	operation                      *string
+	mode                           *string
+	requested_model                *string
+	mapped_model                   *string
+	status                         *string
+	requested_count                *int
+	addrequested_count             *int
+	completed_count                *int
+	addcompleted_count             *int
+	request                        *json.RawMessage
+	appendrequest                  json.RawMessage
+	request_digest                 *string
+	idempotency_key_hash           *string
+	reserved_usd                   *float64
+	addreserved_usd                *float64
+	reservation_billing_type       *int
+	addreservation_billing_type    *int
+	reservation_subscription_id    *int64
+	addreservation_subscription_id *int64
+	reservation_status             *string
+	usage                          *json.RawMessage
+	appendusage                    json.RawMessage
+	settlement_status              *string
+	attempt_id                     *string
+	worker_id                      *string
+	execution_phase                *string
+	heartbeat_at                   *time.Time
+	cancel_requested_at            *time.Time
+	canceled_at                    *time.Time
+	error_type                     *string
+	error_code                     *string
+	error_message                  *string
+	error_retryable                *bool
+	started_at                     *time.Time
+	finished_at                    *time.Time
+	expires_at                     *time.Time
+	clearedFields                  map[string]struct{}
+	user                           *int64
+	cleareduser                    bool
+	api_key                        *int64
+	clearedapi_key                 bool
+	group                          *int64
+	clearedgroup                   bool
+	inputs                         map[int64]struct{}
+	removedinputs                  map[int64]struct{}
+	clearedinputs                  bool
+	results                        map[int64]struct{}
+	removedresults                 map[int64]struct{}
+	clearedresults                 bool
+	done                           bool
+	oldValue                       func(context.Context) (*ImageJob, error)
+	predicates                     []predicate.ImageJob
+}
+
+var _ ent.Mutation = (*ImageJobMutation)(nil)
+
+// imagejobOption allows management of the mutation configuration using functional options.
+type imagejobOption func(*ImageJobMutation)
+
+// newImageJobMutation creates new mutation for the ImageJob entity.
+func newImageJobMutation(c config, op Op, opts ...imagejobOption) *ImageJobMutation {
+	m := &ImageJobMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeImageJob,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withImageJobID sets the ID field of the mutation.
+func withImageJobID(id int64) imagejobOption {
+	return func(m *ImageJobMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ImageJob
+		)
+		m.oldValue = func(ctx context.Context) (*ImageJob, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ImageJob.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withImageJob sets the old ImageJob of the mutation.
+func withImageJob(node *ImageJob) imagejobOption {
+	return func(m *ImageJobMutation) {
+		m.oldValue = func(context.Context) (*ImageJob, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ImageJobMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ImageJobMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ImageJobMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ImageJobMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ImageJob.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ImageJobMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ImageJobMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ImageJobMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ImageJobMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ImageJobMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ImageJobMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetPublicID sets the "public_id" field.
+func (m *ImageJobMutation) SetPublicID(s string) {
+	m.public_id = &s
+}
+
+// PublicID returns the value of the "public_id" field in the mutation.
+func (m *ImageJobMutation) PublicID() (r string, exists bool) {
+	v := m.public_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPublicID returns the old "public_id" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldPublicID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPublicID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPublicID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPublicID: %w", err)
+	}
+	return oldValue.PublicID, nil
+}
+
+// ResetPublicID resets all changes to the "public_id" field.
+func (m *ImageJobMutation) ResetPublicID() {
+	m.public_id = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *ImageJobMutation) SetUserID(i int64) {
+	m.user = &i
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *ImageJobMutation) UserID() (r int64, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *ImageJobMutation) ResetUserID() {
+	m.user = nil
+}
+
+// SetAPIKeyID sets the "api_key_id" field.
+func (m *ImageJobMutation) SetAPIKeyID(i int64) {
+	m.api_key = &i
+}
+
+// APIKeyID returns the value of the "api_key_id" field in the mutation.
+func (m *ImageJobMutation) APIKeyID() (r int64, exists bool) {
+	v := m.api_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAPIKeyID returns the old "api_key_id" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldAPIKeyID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAPIKeyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAPIKeyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAPIKeyID: %w", err)
+	}
+	return oldValue.APIKeyID, nil
+}
+
+// ResetAPIKeyID resets all changes to the "api_key_id" field.
+func (m *ImageJobMutation) ResetAPIKeyID() {
+	m.api_key = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *ImageJobMutation) SetGroupID(i int64) {
+	m.group = &i
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *ImageJobMutation) GroupID() (r int64, exists bool) {
+	v := m.group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldGroupID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *ImageJobMutation) ResetGroupID() {
+	m.group = nil
+}
+
+// SetEndpoint sets the "endpoint" field.
+func (m *ImageJobMutation) SetEndpoint(s string) {
+	m.endpoint = &s
+}
+
+// Endpoint returns the value of the "endpoint" field in the mutation.
+func (m *ImageJobMutation) Endpoint() (r string, exists bool) {
+	v := m.endpoint
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEndpoint returns the old "endpoint" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldEndpoint(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEndpoint is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEndpoint requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEndpoint: %w", err)
+	}
+	return oldValue.Endpoint, nil
+}
+
+// ResetEndpoint resets all changes to the "endpoint" field.
+func (m *ImageJobMutation) ResetEndpoint() {
+	m.endpoint = nil
+}
+
+// SetOperation sets the "operation" field.
+func (m *ImageJobMutation) SetOperation(s string) {
+	m.operation = &s
+}
+
+// Operation returns the value of the "operation" field in the mutation.
+func (m *ImageJobMutation) Operation() (r string, exists bool) {
+	v := m.operation
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOperation returns the old "operation" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldOperation(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOperation is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOperation requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOperation: %w", err)
+	}
+	return oldValue.Operation, nil
+}
+
+// ResetOperation resets all changes to the "operation" field.
+func (m *ImageJobMutation) ResetOperation() {
+	m.operation = nil
+}
+
+// SetMode sets the "mode" field.
+func (m *ImageJobMutation) SetMode(s string) {
+	m.mode = &s
+}
+
+// Mode returns the value of the "mode" field in the mutation.
+func (m *ImageJobMutation) Mode() (r string, exists bool) {
+	v := m.mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMode returns the old "mode" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMode: %w", err)
+	}
+	return oldValue.Mode, nil
+}
+
+// ResetMode resets all changes to the "mode" field.
+func (m *ImageJobMutation) ResetMode() {
+	m.mode = nil
+}
+
+// SetRequestedModel sets the "requested_model" field.
+func (m *ImageJobMutation) SetRequestedModel(s string) {
+	m.requested_model = &s
+}
+
+// RequestedModel returns the value of the "requested_model" field in the mutation.
+func (m *ImageJobMutation) RequestedModel() (r string, exists bool) {
+	v := m.requested_model
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestedModel returns the old "requested_model" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldRequestedModel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestedModel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestedModel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestedModel: %w", err)
+	}
+	return oldValue.RequestedModel, nil
+}
+
+// ResetRequestedModel resets all changes to the "requested_model" field.
+func (m *ImageJobMutation) ResetRequestedModel() {
+	m.requested_model = nil
+}
+
+// SetMappedModel sets the "mapped_model" field.
+func (m *ImageJobMutation) SetMappedModel(s string) {
+	m.mapped_model = &s
+}
+
+// MappedModel returns the value of the "mapped_model" field in the mutation.
+func (m *ImageJobMutation) MappedModel() (r string, exists bool) {
+	v := m.mapped_model
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMappedModel returns the old "mapped_model" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldMappedModel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMappedModel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMappedModel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMappedModel: %w", err)
+	}
+	return oldValue.MappedModel, nil
+}
+
+// ResetMappedModel resets all changes to the "mapped_model" field.
+func (m *ImageJobMutation) ResetMappedModel() {
+	m.mapped_model = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *ImageJobMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *ImageJobMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *ImageJobMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetRequestedCount sets the "requested_count" field.
+func (m *ImageJobMutation) SetRequestedCount(i int) {
+	m.requested_count = &i
+	m.addrequested_count = nil
+}
+
+// RequestedCount returns the value of the "requested_count" field in the mutation.
+func (m *ImageJobMutation) RequestedCount() (r int, exists bool) {
+	v := m.requested_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestedCount returns the old "requested_count" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldRequestedCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestedCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestedCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestedCount: %w", err)
+	}
+	return oldValue.RequestedCount, nil
+}
+
+// AddRequestedCount adds i to the "requested_count" field.
+func (m *ImageJobMutation) AddRequestedCount(i int) {
+	if m.addrequested_count != nil {
+		*m.addrequested_count += i
+	} else {
+		m.addrequested_count = &i
+	}
+}
+
+// AddedRequestedCount returns the value that was added to the "requested_count" field in this mutation.
+func (m *ImageJobMutation) AddedRequestedCount() (r int, exists bool) {
+	v := m.addrequested_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRequestedCount resets all changes to the "requested_count" field.
+func (m *ImageJobMutation) ResetRequestedCount() {
+	m.requested_count = nil
+	m.addrequested_count = nil
+}
+
+// SetCompletedCount sets the "completed_count" field.
+func (m *ImageJobMutation) SetCompletedCount(i int) {
+	m.completed_count = &i
+	m.addcompleted_count = nil
+}
+
+// CompletedCount returns the value of the "completed_count" field in the mutation.
+func (m *ImageJobMutation) CompletedCount() (r int, exists bool) {
+	v := m.completed_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompletedCount returns the old "completed_count" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldCompletedCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompletedCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompletedCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompletedCount: %w", err)
+	}
+	return oldValue.CompletedCount, nil
+}
+
+// AddCompletedCount adds i to the "completed_count" field.
+func (m *ImageJobMutation) AddCompletedCount(i int) {
+	if m.addcompleted_count != nil {
+		*m.addcompleted_count += i
+	} else {
+		m.addcompleted_count = &i
+	}
+}
+
+// AddedCompletedCount returns the value that was added to the "completed_count" field in this mutation.
+func (m *ImageJobMutation) AddedCompletedCount() (r int, exists bool) {
+	v := m.addcompleted_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCompletedCount resets all changes to the "completed_count" field.
+func (m *ImageJobMutation) ResetCompletedCount() {
+	m.completed_count = nil
+	m.addcompleted_count = nil
+}
+
+// SetRequest sets the "request" field.
+func (m *ImageJobMutation) SetRequest(jm json.RawMessage) {
+	m.request = &jm
+	m.appendrequest = nil
+}
+
+// Request returns the value of the "request" field in the mutation.
+func (m *ImageJobMutation) Request() (r json.RawMessage, exists bool) {
+	v := m.request
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequest returns the old "request" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldRequest(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequest: %w", err)
+	}
+	return oldValue.Request, nil
+}
+
+// AppendRequest adds jm to the "request" field.
+func (m *ImageJobMutation) AppendRequest(jm json.RawMessage) {
+	m.appendrequest = append(m.appendrequest, jm...)
+}
+
+// AppendedRequest returns the list of values that were appended to the "request" field in this mutation.
+func (m *ImageJobMutation) AppendedRequest() (json.RawMessage, bool) {
+	if len(m.appendrequest) == 0 {
+		return nil, false
+	}
+	return m.appendrequest, true
+}
+
+// ResetRequest resets all changes to the "request" field.
+func (m *ImageJobMutation) ResetRequest() {
+	m.request = nil
+	m.appendrequest = nil
+}
+
+// SetRequestDigest sets the "request_digest" field.
+func (m *ImageJobMutation) SetRequestDigest(s string) {
+	m.request_digest = &s
+}
+
+// RequestDigest returns the value of the "request_digest" field in the mutation.
+func (m *ImageJobMutation) RequestDigest() (r string, exists bool) {
+	v := m.request_digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestDigest returns the old "request_digest" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldRequestDigest(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestDigest: %w", err)
+	}
+	return oldValue.RequestDigest, nil
+}
+
+// ResetRequestDigest resets all changes to the "request_digest" field.
+func (m *ImageJobMutation) ResetRequestDigest() {
+	m.request_digest = nil
+}
+
+// SetIdempotencyKeyHash sets the "idempotency_key_hash" field.
+func (m *ImageJobMutation) SetIdempotencyKeyHash(s string) {
+	m.idempotency_key_hash = &s
+}
+
+// IdempotencyKeyHash returns the value of the "idempotency_key_hash" field in the mutation.
+func (m *ImageJobMutation) IdempotencyKeyHash() (r string, exists bool) {
+	v := m.idempotency_key_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIdempotencyKeyHash returns the old "idempotency_key_hash" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldIdempotencyKeyHash(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIdempotencyKeyHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIdempotencyKeyHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIdempotencyKeyHash: %w", err)
+	}
+	return oldValue.IdempotencyKeyHash, nil
+}
+
+// ClearIdempotencyKeyHash clears the value of the "idempotency_key_hash" field.
+func (m *ImageJobMutation) ClearIdempotencyKeyHash() {
+	m.idempotency_key_hash = nil
+	m.clearedFields[imagejob.FieldIdempotencyKeyHash] = struct{}{}
+}
+
+// IdempotencyKeyHashCleared returns if the "idempotency_key_hash" field was cleared in this mutation.
+func (m *ImageJobMutation) IdempotencyKeyHashCleared() bool {
+	_, ok := m.clearedFields[imagejob.FieldIdempotencyKeyHash]
+	return ok
+}
+
+// ResetIdempotencyKeyHash resets all changes to the "idempotency_key_hash" field.
+func (m *ImageJobMutation) ResetIdempotencyKeyHash() {
+	m.idempotency_key_hash = nil
+	delete(m.clearedFields, imagejob.FieldIdempotencyKeyHash)
+}
+
+// SetReservedUsd sets the "reserved_usd" field.
+func (m *ImageJobMutation) SetReservedUsd(f float64) {
+	m.reserved_usd = &f
+	m.addreserved_usd = nil
+}
+
+// ReservedUsd returns the value of the "reserved_usd" field in the mutation.
+func (m *ImageJobMutation) ReservedUsd() (r float64, exists bool) {
+	v := m.reserved_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReservedUsd returns the old "reserved_usd" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldReservedUsd(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReservedUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReservedUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReservedUsd: %w", err)
+	}
+	return oldValue.ReservedUsd, nil
+}
+
+// AddReservedUsd adds f to the "reserved_usd" field.
+func (m *ImageJobMutation) AddReservedUsd(f float64) {
+	if m.addreserved_usd != nil {
+		*m.addreserved_usd += f
+	} else {
+		m.addreserved_usd = &f
+	}
+}
+
+// AddedReservedUsd returns the value that was added to the "reserved_usd" field in this mutation.
+func (m *ImageJobMutation) AddedReservedUsd() (r float64, exists bool) {
+	v := m.addreserved_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetReservedUsd resets all changes to the "reserved_usd" field.
+func (m *ImageJobMutation) ResetReservedUsd() {
+	m.reserved_usd = nil
+	m.addreserved_usd = nil
+}
+
+// SetReservationBillingType sets the "reservation_billing_type" field.
+func (m *ImageJobMutation) SetReservationBillingType(i int) {
+	m.reservation_billing_type = &i
+	m.addreservation_billing_type = nil
+}
+
+// ReservationBillingType returns the value of the "reservation_billing_type" field in the mutation.
+func (m *ImageJobMutation) ReservationBillingType() (r int, exists bool) {
+	v := m.reservation_billing_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReservationBillingType returns the old "reservation_billing_type" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldReservationBillingType(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReservationBillingType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReservationBillingType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReservationBillingType: %w", err)
+	}
+	return oldValue.ReservationBillingType, nil
+}
+
+// AddReservationBillingType adds i to the "reservation_billing_type" field.
+func (m *ImageJobMutation) AddReservationBillingType(i int) {
+	if m.addreservation_billing_type != nil {
+		*m.addreservation_billing_type += i
+	} else {
+		m.addreservation_billing_type = &i
+	}
+}
+
+// AddedReservationBillingType returns the value that was added to the "reservation_billing_type" field in this mutation.
+func (m *ImageJobMutation) AddedReservationBillingType() (r int, exists bool) {
+	v := m.addreservation_billing_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetReservationBillingType resets all changes to the "reservation_billing_type" field.
+func (m *ImageJobMutation) ResetReservationBillingType() {
+	m.reservation_billing_type = nil
+	m.addreservation_billing_type = nil
+}
+
+// SetReservationSubscriptionID sets the "reservation_subscription_id" field.
+func (m *ImageJobMutation) SetReservationSubscriptionID(i int64) {
+	m.reservation_subscription_id = &i
+	m.addreservation_subscription_id = nil
+}
+
+// ReservationSubscriptionID returns the value of the "reservation_subscription_id" field in the mutation.
+func (m *ImageJobMutation) ReservationSubscriptionID() (r int64, exists bool) {
+	v := m.reservation_subscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReservationSubscriptionID returns the old "reservation_subscription_id" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldReservationSubscriptionID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReservationSubscriptionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReservationSubscriptionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReservationSubscriptionID: %w", err)
+	}
+	return oldValue.ReservationSubscriptionID, nil
+}
+
+// AddReservationSubscriptionID adds i to the "reservation_subscription_id" field.
+func (m *ImageJobMutation) AddReservationSubscriptionID(i int64) {
+	if m.addreservation_subscription_id != nil {
+		*m.addreservation_subscription_id += i
+	} else {
+		m.addreservation_subscription_id = &i
+	}
+}
+
+// AddedReservationSubscriptionID returns the value that was added to the "reservation_subscription_id" field in this mutation.
+func (m *ImageJobMutation) AddedReservationSubscriptionID() (r int64, exists bool) {
+	v := m.addreservation_subscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearReservationSubscriptionID clears the value of the "reservation_subscription_id" field.
+func (m *ImageJobMutation) ClearReservationSubscriptionID() {
+	m.reservation_subscription_id = nil
+	m.addreservation_subscription_id = nil
+	m.clearedFields[imagejob.FieldReservationSubscriptionID] = struct{}{}
+}
+
+// ReservationSubscriptionIDCleared returns if the "reservation_subscription_id" field was cleared in this mutation.
+func (m *ImageJobMutation) ReservationSubscriptionIDCleared() bool {
+	_, ok := m.clearedFields[imagejob.FieldReservationSubscriptionID]
+	return ok
+}
+
+// ResetReservationSubscriptionID resets all changes to the "reservation_subscription_id" field.
+func (m *ImageJobMutation) ResetReservationSubscriptionID() {
+	m.reservation_subscription_id = nil
+	m.addreservation_subscription_id = nil
+	delete(m.clearedFields, imagejob.FieldReservationSubscriptionID)
+}
+
+// SetReservationStatus sets the "reservation_status" field.
+func (m *ImageJobMutation) SetReservationStatus(s string) {
+	m.reservation_status = &s
+}
+
+// ReservationStatus returns the value of the "reservation_status" field in the mutation.
+func (m *ImageJobMutation) ReservationStatus() (r string, exists bool) {
+	v := m.reservation_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReservationStatus returns the old "reservation_status" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldReservationStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReservationStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReservationStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReservationStatus: %w", err)
+	}
+	return oldValue.ReservationStatus, nil
+}
+
+// ResetReservationStatus resets all changes to the "reservation_status" field.
+func (m *ImageJobMutation) ResetReservationStatus() {
+	m.reservation_status = nil
+}
+
+// SetUsage sets the "usage" field.
+func (m *ImageJobMutation) SetUsage(jm json.RawMessage) {
+	m.usage = &jm
+	m.appendusage = nil
+}
+
+// Usage returns the value of the "usage" field in the mutation.
+func (m *ImageJobMutation) Usage() (r json.RawMessage, exists bool) {
+	v := m.usage
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUsage returns the old "usage" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldUsage(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUsage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUsage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUsage: %w", err)
+	}
+	return oldValue.Usage, nil
+}
+
+// AppendUsage adds jm to the "usage" field.
+func (m *ImageJobMutation) AppendUsage(jm json.RawMessage) {
+	m.appendusage = append(m.appendusage, jm...)
+}
+
+// AppendedUsage returns the list of values that were appended to the "usage" field in this mutation.
+func (m *ImageJobMutation) AppendedUsage() (json.RawMessage, bool) {
+	if len(m.appendusage) == 0 {
+		return nil, false
+	}
+	return m.appendusage, true
+}
+
+// ClearUsage clears the value of the "usage" field.
+func (m *ImageJobMutation) ClearUsage() {
+	m.usage = nil
+	m.appendusage = nil
+	m.clearedFields[imagejob.FieldUsage] = struct{}{}
+}
+
+// UsageCleared returns if the "usage" field was cleared in this mutation.
+func (m *ImageJobMutation) UsageCleared() bool {
+	_, ok := m.clearedFields[imagejob.FieldUsage]
+	return ok
+}
+
+// ResetUsage resets all changes to the "usage" field.
+func (m *ImageJobMutation) ResetUsage() {
+	m.usage = nil
+	m.appendusage = nil
+	delete(m.clearedFields, imagejob.FieldUsage)
+}
+
+// SetSettlementStatus sets the "settlement_status" field.
+func (m *ImageJobMutation) SetSettlementStatus(s string) {
+	m.settlement_status = &s
+}
+
+// SettlementStatus returns the value of the "settlement_status" field in the mutation.
+func (m *ImageJobMutation) SettlementStatus() (r string, exists bool) {
+	v := m.settlement_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSettlementStatus returns the old "settlement_status" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldSettlementStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSettlementStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSettlementStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSettlementStatus: %w", err)
+	}
+	return oldValue.SettlementStatus, nil
+}
+
+// ResetSettlementStatus resets all changes to the "settlement_status" field.
+func (m *ImageJobMutation) ResetSettlementStatus() {
+	m.settlement_status = nil
+}
+
+// SetAttemptID sets the "attempt_id" field.
+func (m *ImageJobMutation) SetAttemptID(s string) {
+	m.attempt_id = &s
+}
+
+// AttemptID returns the value of the "attempt_id" field in the mutation.
+func (m *ImageJobMutation) AttemptID() (r string, exists bool) {
+	v := m.attempt_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttemptID returns the old "attempt_id" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldAttemptID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttemptID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttemptID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttemptID: %w", err)
+	}
+	return oldValue.AttemptID, nil
+}
+
+// ClearAttemptID clears the value of the "attempt_id" field.
+func (m *ImageJobMutation) ClearAttemptID() {
+	m.attempt_id = nil
+	m.clearedFields[imagejob.FieldAttemptID] = struct{}{}
+}
+
+// AttemptIDCleared returns if the "attempt_id" field was cleared in this mutation.
+func (m *ImageJobMutation) AttemptIDCleared() bool {
+	_, ok := m.clearedFields[imagejob.FieldAttemptID]
+	return ok
+}
+
+// ResetAttemptID resets all changes to the "attempt_id" field.
+func (m *ImageJobMutation) ResetAttemptID() {
+	m.attempt_id = nil
+	delete(m.clearedFields, imagejob.FieldAttemptID)
+}
+
+// SetWorkerID sets the "worker_id" field.
+func (m *ImageJobMutation) SetWorkerID(s string) {
+	m.worker_id = &s
+}
+
+// WorkerID returns the value of the "worker_id" field in the mutation.
+func (m *ImageJobMutation) WorkerID() (r string, exists bool) {
+	v := m.worker_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkerID returns the old "worker_id" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldWorkerID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkerID: %w", err)
+	}
+	return oldValue.WorkerID, nil
+}
+
+// ClearWorkerID clears the value of the "worker_id" field.
+func (m *ImageJobMutation) ClearWorkerID() {
+	m.worker_id = nil
+	m.clearedFields[imagejob.FieldWorkerID] = struct{}{}
+}
+
+// WorkerIDCleared returns if the "worker_id" field was cleared in this mutation.
+func (m *ImageJobMutation) WorkerIDCleared() bool {
+	_, ok := m.clearedFields[imagejob.FieldWorkerID]
+	return ok
+}
+
+// ResetWorkerID resets all changes to the "worker_id" field.
+func (m *ImageJobMutation) ResetWorkerID() {
+	m.worker_id = nil
+	delete(m.clearedFields, imagejob.FieldWorkerID)
+}
+
+// SetExecutionPhase sets the "execution_phase" field.
+func (m *ImageJobMutation) SetExecutionPhase(s string) {
+	m.execution_phase = &s
+}
+
+// ExecutionPhase returns the value of the "execution_phase" field in the mutation.
+func (m *ImageJobMutation) ExecutionPhase() (r string, exists bool) {
+	v := m.execution_phase
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutionPhase returns the old "execution_phase" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldExecutionPhase(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutionPhase is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutionPhase requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutionPhase: %w", err)
+	}
+	return oldValue.ExecutionPhase, nil
+}
+
+// ResetExecutionPhase resets all changes to the "execution_phase" field.
+func (m *ImageJobMutation) ResetExecutionPhase() {
+	m.execution_phase = nil
+}
+
+// SetHeartbeatAt sets the "heartbeat_at" field.
+func (m *ImageJobMutation) SetHeartbeatAt(t time.Time) {
+	m.heartbeat_at = &t
+}
+
+// HeartbeatAt returns the value of the "heartbeat_at" field in the mutation.
+func (m *ImageJobMutation) HeartbeatAt() (r time.Time, exists bool) {
+	v := m.heartbeat_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeartbeatAt returns the old "heartbeat_at" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldHeartbeatAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeartbeatAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeartbeatAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeartbeatAt: %w", err)
+	}
+	return oldValue.HeartbeatAt, nil
+}
+
+// ClearHeartbeatAt clears the value of the "heartbeat_at" field.
+func (m *ImageJobMutation) ClearHeartbeatAt() {
+	m.heartbeat_at = nil
+	m.clearedFields[imagejob.FieldHeartbeatAt] = struct{}{}
+}
+
+// HeartbeatAtCleared returns if the "heartbeat_at" field was cleared in this mutation.
+func (m *ImageJobMutation) HeartbeatAtCleared() bool {
+	_, ok := m.clearedFields[imagejob.FieldHeartbeatAt]
+	return ok
+}
+
+// ResetHeartbeatAt resets all changes to the "heartbeat_at" field.
+func (m *ImageJobMutation) ResetHeartbeatAt() {
+	m.heartbeat_at = nil
+	delete(m.clearedFields, imagejob.FieldHeartbeatAt)
+}
+
+// SetCancelRequestedAt sets the "cancel_requested_at" field.
+func (m *ImageJobMutation) SetCancelRequestedAt(t time.Time) {
+	m.cancel_requested_at = &t
+}
+
+// CancelRequestedAt returns the value of the "cancel_requested_at" field in the mutation.
+func (m *ImageJobMutation) CancelRequestedAt() (r time.Time, exists bool) {
+	v := m.cancel_requested_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCancelRequestedAt returns the old "cancel_requested_at" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldCancelRequestedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCancelRequestedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCancelRequestedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCancelRequestedAt: %w", err)
+	}
+	return oldValue.CancelRequestedAt, nil
+}
+
+// ClearCancelRequestedAt clears the value of the "cancel_requested_at" field.
+func (m *ImageJobMutation) ClearCancelRequestedAt() {
+	m.cancel_requested_at = nil
+	m.clearedFields[imagejob.FieldCancelRequestedAt] = struct{}{}
+}
+
+// CancelRequestedAtCleared returns if the "cancel_requested_at" field was cleared in this mutation.
+func (m *ImageJobMutation) CancelRequestedAtCleared() bool {
+	_, ok := m.clearedFields[imagejob.FieldCancelRequestedAt]
+	return ok
+}
+
+// ResetCancelRequestedAt resets all changes to the "cancel_requested_at" field.
+func (m *ImageJobMutation) ResetCancelRequestedAt() {
+	m.cancel_requested_at = nil
+	delete(m.clearedFields, imagejob.FieldCancelRequestedAt)
+}
+
+// SetCanceledAt sets the "canceled_at" field.
+func (m *ImageJobMutation) SetCanceledAt(t time.Time) {
+	m.canceled_at = &t
+}
+
+// CanceledAt returns the value of the "canceled_at" field in the mutation.
+func (m *ImageJobMutation) CanceledAt() (r time.Time, exists bool) {
+	v := m.canceled_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCanceledAt returns the old "canceled_at" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldCanceledAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCanceledAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCanceledAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCanceledAt: %w", err)
+	}
+	return oldValue.CanceledAt, nil
+}
+
+// ClearCanceledAt clears the value of the "canceled_at" field.
+func (m *ImageJobMutation) ClearCanceledAt() {
+	m.canceled_at = nil
+	m.clearedFields[imagejob.FieldCanceledAt] = struct{}{}
+}
+
+// CanceledAtCleared returns if the "canceled_at" field was cleared in this mutation.
+func (m *ImageJobMutation) CanceledAtCleared() bool {
+	_, ok := m.clearedFields[imagejob.FieldCanceledAt]
+	return ok
+}
+
+// ResetCanceledAt resets all changes to the "canceled_at" field.
+func (m *ImageJobMutation) ResetCanceledAt() {
+	m.canceled_at = nil
+	delete(m.clearedFields, imagejob.FieldCanceledAt)
+}
+
+// SetErrorType sets the "error_type" field.
+func (m *ImageJobMutation) SetErrorType(s string) {
+	m.error_type = &s
+}
+
+// ErrorType returns the value of the "error_type" field in the mutation.
+func (m *ImageJobMutation) ErrorType() (r string, exists bool) {
+	v := m.error_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorType returns the old "error_type" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldErrorType(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorType: %w", err)
+	}
+	return oldValue.ErrorType, nil
+}
+
+// ClearErrorType clears the value of the "error_type" field.
+func (m *ImageJobMutation) ClearErrorType() {
+	m.error_type = nil
+	m.clearedFields[imagejob.FieldErrorType] = struct{}{}
+}
+
+// ErrorTypeCleared returns if the "error_type" field was cleared in this mutation.
+func (m *ImageJobMutation) ErrorTypeCleared() bool {
+	_, ok := m.clearedFields[imagejob.FieldErrorType]
+	return ok
+}
+
+// ResetErrorType resets all changes to the "error_type" field.
+func (m *ImageJobMutation) ResetErrorType() {
+	m.error_type = nil
+	delete(m.clearedFields, imagejob.FieldErrorType)
+}
+
+// SetErrorCode sets the "error_code" field.
+func (m *ImageJobMutation) SetErrorCode(s string) {
+	m.error_code = &s
+}
+
+// ErrorCode returns the value of the "error_code" field in the mutation.
+func (m *ImageJobMutation) ErrorCode() (r string, exists bool) {
+	v := m.error_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorCode returns the old "error_code" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldErrorCode(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorCode: %w", err)
+	}
+	return oldValue.ErrorCode, nil
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (m *ImageJobMutation) ClearErrorCode() {
+	m.error_code = nil
+	m.clearedFields[imagejob.FieldErrorCode] = struct{}{}
+}
+
+// ErrorCodeCleared returns if the "error_code" field was cleared in this mutation.
+func (m *ImageJobMutation) ErrorCodeCleared() bool {
+	_, ok := m.clearedFields[imagejob.FieldErrorCode]
+	return ok
+}
+
+// ResetErrorCode resets all changes to the "error_code" field.
+func (m *ImageJobMutation) ResetErrorCode() {
+	m.error_code = nil
+	delete(m.clearedFields, imagejob.FieldErrorCode)
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (m *ImageJobMutation) SetErrorMessage(s string) {
+	m.error_message = &s
+}
+
+// ErrorMessage returns the value of the "error_message" field in the mutation.
+func (m *ImageJobMutation) ErrorMessage() (r string, exists bool) {
+	v := m.error_message
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorMessage returns the old "error_message" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldErrorMessage(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorMessage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorMessage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorMessage: %w", err)
+	}
+	return oldValue.ErrorMessage, nil
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (m *ImageJobMutation) ClearErrorMessage() {
+	m.error_message = nil
+	m.clearedFields[imagejob.FieldErrorMessage] = struct{}{}
+}
+
+// ErrorMessageCleared returns if the "error_message" field was cleared in this mutation.
+func (m *ImageJobMutation) ErrorMessageCleared() bool {
+	_, ok := m.clearedFields[imagejob.FieldErrorMessage]
+	return ok
+}
+
+// ResetErrorMessage resets all changes to the "error_message" field.
+func (m *ImageJobMutation) ResetErrorMessage() {
+	m.error_message = nil
+	delete(m.clearedFields, imagejob.FieldErrorMessage)
+}
+
+// SetErrorRetryable sets the "error_retryable" field.
+func (m *ImageJobMutation) SetErrorRetryable(b bool) {
+	m.error_retryable = &b
+}
+
+// ErrorRetryable returns the value of the "error_retryable" field in the mutation.
+func (m *ImageJobMutation) ErrorRetryable() (r bool, exists bool) {
+	v := m.error_retryable
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorRetryable returns the old "error_retryable" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldErrorRetryable(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorRetryable is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorRetryable requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorRetryable: %w", err)
+	}
+	return oldValue.ErrorRetryable, nil
+}
+
+// ResetErrorRetryable resets all changes to the "error_retryable" field.
+func (m *ImageJobMutation) ResetErrorRetryable() {
+	m.error_retryable = nil
+}
+
+// SetStartedAt sets the "started_at" field.
+func (m *ImageJobMutation) SetStartedAt(t time.Time) {
+	m.started_at = &t
+}
+
+// StartedAt returns the value of the "started_at" field in the mutation.
+func (m *ImageJobMutation) StartedAt() (r time.Time, exists bool) {
+	v := m.started_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartedAt returns the old "started_at" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldStartedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartedAt: %w", err)
+	}
+	return oldValue.StartedAt, nil
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (m *ImageJobMutation) ClearStartedAt() {
+	m.started_at = nil
+	m.clearedFields[imagejob.FieldStartedAt] = struct{}{}
+}
+
+// StartedAtCleared returns if the "started_at" field was cleared in this mutation.
+func (m *ImageJobMutation) StartedAtCleared() bool {
+	_, ok := m.clearedFields[imagejob.FieldStartedAt]
+	return ok
+}
+
+// ResetStartedAt resets all changes to the "started_at" field.
+func (m *ImageJobMutation) ResetStartedAt() {
+	m.started_at = nil
+	delete(m.clearedFields, imagejob.FieldStartedAt)
+}
+
+// SetFinishedAt sets the "finished_at" field.
+func (m *ImageJobMutation) SetFinishedAt(t time.Time) {
+	m.finished_at = &t
+}
+
+// FinishedAt returns the value of the "finished_at" field in the mutation.
+func (m *ImageJobMutation) FinishedAt() (r time.Time, exists bool) {
+	v := m.finished_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFinishedAt returns the old "finished_at" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldFinishedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFinishedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFinishedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFinishedAt: %w", err)
+	}
+	return oldValue.FinishedAt, nil
+}
+
+// ClearFinishedAt clears the value of the "finished_at" field.
+func (m *ImageJobMutation) ClearFinishedAt() {
+	m.finished_at = nil
+	m.clearedFields[imagejob.FieldFinishedAt] = struct{}{}
+}
+
+// FinishedAtCleared returns if the "finished_at" field was cleared in this mutation.
+func (m *ImageJobMutation) FinishedAtCleared() bool {
+	_, ok := m.clearedFields[imagejob.FieldFinishedAt]
+	return ok
+}
+
+// ResetFinishedAt resets all changes to the "finished_at" field.
+func (m *ImageJobMutation) ResetFinishedAt() {
+	m.finished_at = nil
+	delete(m.clearedFields, imagejob.FieldFinishedAt)
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *ImageJobMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *ImageJobMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the ImageJob entity.
+// If the ImageJob object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *ImageJobMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *ImageJobMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[imagejob.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *ImageJobMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *ImageJobMutation) UserIDs() (ids []int64) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *ImageJobMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// ClearAPIKey clears the "api_key" edge to the APIKey entity.
+func (m *ImageJobMutation) ClearAPIKey() {
+	m.clearedapi_key = true
+	m.clearedFields[imagejob.FieldAPIKeyID] = struct{}{}
+}
+
+// APIKeyCleared reports if the "api_key" edge to the APIKey entity was cleared.
+func (m *ImageJobMutation) APIKeyCleared() bool {
+	return m.clearedapi_key
+}
+
+// APIKeyIDs returns the "api_key" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// APIKeyID instead. It exists only for internal usage by the builders.
+func (m *ImageJobMutation) APIKeyIDs() (ids []int64) {
+	if id := m.api_key; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetAPIKey resets all changes to the "api_key" edge.
+func (m *ImageJobMutation) ResetAPIKey() {
+	m.api_key = nil
+	m.clearedapi_key = false
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (m *ImageJobMutation) ClearGroup() {
+	m.clearedgroup = true
+	m.clearedFields[imagejob.FieldGroupID] = struct{}{}
+}
+
+// GroupCleared reports if the "group" edge to the Group entity was cleared.
+func (m *ImageJobMutation) GroupCleared() bool {
+	return m.clearedgroup
+}
+
+// GroupIDs returns the "group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GroupID instead. It exists only for internal usage by the builders.
+func (m *ImageJobMutation) GroupIDs() (ids []int64) {
+	if id := m.group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGroup resets all changes to the "group" edge.
+func (m *ImageJobMutation) ResetGroup() {
+	m.group = nil
+	m.clearedgroup = false
+}
+
+// AddInputIDs adds the "inputs" edge to the ImageJobInput entity by ids.
+func (m *ImageJobMutation) AddInputIDs(ids ...int64) {
+	if m.inputs == nil {
+		m.inputs = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.inputs[ids[i]] = struct{}{}
+	}
+}
+
+// ClearInputs clears the "inputs" edge to the ImageJobInput entity.
+func (m *ImageJobMutation) ClearInputs() {
+	m.clearedinputs = true
+}
+
+// InputsCleared reports if the "inputs" edge to the ImageJobInput entity was cleared.
+func (m *ImageJobMutation) InputsCleared() bool {
+	return m.clearedinputs
+}
+
+// RemoveInputIDs removes the "inputs" edge to the ImageJobInput entity by IDs.
+func (m *ImageJobMutation) RemoveInputIDs(ids ...int64) {
+	if m.removedinputs == nil {
+		m.removedinputs = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.inputs, ids[i])
+		m.removedinputs[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedInputs returns the removed IDs of the "inputs" edge to the ImageJobInput entity.
+func (m *ImageJobMutation) RemovedInputsIDs() (ids []int64) {
+	for id := range m.removedinputs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// InputsIDs returns the "inputs" edge IDs in the mutation.
+func (m *ImageJobMutation) InputsIDs() (ids []int64) {
+	for id := range m.inputs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetInputs resets all changes to the "inputs" edge.
+func (m *ImageJobMutation) ResetInputs() {
+	m.inputs = nil
+	m.clearedinputs = false
+	m.removedinputs = nil
+}
+
+// AddResultIDs adds the "results" edge to the ImageJobResult entity by ids.
+func (m *ImageJobMutation) AddResultIDs(ids ...int64) {
+	if m.results == nil {
+		m.results = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.results[ids[i]] = struct{}{}
+	}
+}
+
+// ClearResults clears the "results" edge to the ImageJobResult entity.
+func (m *ImageJobMutation) ClearResults() {
+	m.clearedresults = true
+}
+
+// ResultsCleared reports if the "results" edge to the ImageJobResult entity was cleared.
+func (m *ImageJobMutation) ResultsCleared() bool {
+	return m.clearedresults
+}
+
+// RemoveResultIDs removes the "results" edge to the ImageJobResult entity by IDs.
+func (m *ImageJobMutation) RemoveResultIDs(ids ...int64) {
+	if m.removedresults == nil {
+		m.removedresults = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.results, ids[i])
+		m.removedresults[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedResults returns the removed IDs of the "results" edge to the ImageJobResult entity.
+func (m *ImageJobMutation) RemovedResultsIDs() (ids []int64) {
+	for id := range m.removedresults {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResultsIDs returns the "results" edge IDs in the mutation.
+func (m *ImageJobMutation) ResultsIDs() (ids []int64) {
+	for id := range m.results {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetResults resets all changes to the "results" edge.
+func (m *ImageJobMutation) ResetResults() {
+	m.results = nil
+	m.clearedresults = false
+	m.removedresults = nil
+}
+
+// Where appends a list predicates to the ImageJobMutation builder.
+func (m *ImageJobMutation) Where(ps ...predicate.ImageJob) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ImageJobMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ImageJobMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ImageJob, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ImageJobMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ImageJobMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ImageJob).
+func (m *ImageJobMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ImageJobMutation) Fields() []string {
+	fields := make([]string, 0, 36)
+	if m.created_at != nil {
+		fields = append(fields, imagejob.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, imagejob.FieldUpdatedAt)
+	}
+	if m.public_id != nil {
+		fields = append(fields, imagejob.FieldPublicID)
+	}
+	if m.user != nil {
+		fields = append(fields, imagejob.FieldUserID)
+	}
+	if m.api_key != nil {
+		fields = append(fields, imagejob.FieldAPIKeyID)
+	}
+	if m.group != nil {
+		fields = append(fields, imagejob.FieldGroupID)
+	}
+	if m.endpoint != nil {
+		fields = append(fields, imagejob.FieldEndpoint)
+	}
+	if m.operation != nil {
+		fields = append(fields, imagejob.FieldOperation)
+	}
+	if m.mode != nil {
+		fields = append(fields, imagejob.FieldMode)
+	}
+	if m.requested_model != nil {
+		fields = append(fields, imagejob.FieldRequestedModel)
+	}
+	if m.mapped_model != nil {
+		fields = append(fields, imagejob.FieldMappedModel)
+	}
+	if m.status != nil {
+		fields = append(fields, imagejob.FieldStatus)
+	}
+	if m.requested_count != nil {
+		fields = append(fields, imagejob.FieldRequestedCount)
+	}
+	if m.completed_count != nil {
+		fields = append(fields, imagejob.FieldCompletedCount)
+	}
+	if m.request != nil {
+		fields = append(fields, imagejob.FieldRequest)
+	}
+	if m.request_digest != nil {
+		fields = append(fields, imagejob.FieldRequestDigest)
+	}
+	if m.idempotency_key_hash != nil {
+		fields = append(fields, imagejob.FieldIdempotencyKeyHash)
+	}
+	if m.reserved_usd != nil {
+		fields = append(fields, imagejob.FieldReservedUsd)
+	}
+	if m.reservation_billing_type != nil {
+		fields = append(fields, imagejob.FieldReservationBillingType)
+	}
+	if m.reservation_subscription_id != nil {
+		fields = append(fields, imagejob.FieldReservationSubscriptionID)
+	}
+	if m.reservation_status != nil {
+		fields = append(fields, imagejob.FieldReservationStatus)
+	}
+	if m.usage != nil {
+		fields = append(fields, imagejob.FieldUsage)
+	}
+	if m.settlement_status != nil {
+		fields = append(fields, imagejob.FieldSettlementStatus)
+	}
+	if m.attempt_id != nil {
+		fields = append(fields, imagejob.FieldAttemptID)
+	}
+	if m.worker_id != nil {
+		fields = append(fields, imagejob.FieldWorkerID)
+	}
+	if m.execution_phase != nil {
+		fields = append(fields, imagejob.FieldExecutionPhase)
+	}
+	if m.heartbeat_at != nil {
+		fields = append(fields, imagejob.FieldHeartbeatAt)
+	}
+	if m.cancel_requested_at != nil {
+		fields = append(fields, imagejob.FieldCancelRequestedAt)
+	}
+	if m.canceled_at != nil {
+		fields = append(fields, imagejob.FieldCanceledAt)
+	}
+	if m.error_type != nil {
+		fields = append(fields, imagejob.FieldErrorType)
+	}
+	if m.error_code != nil {
+		fields = append(fields, imagejob.FieldErrorCode)
+	}
+	if m.error_message != nil {
+		fields = append(fields, imagejob.FieldErrorMessage)
+	}
+	if m.error_retryable != nil {
+		fields = append(fields, imagejob.FieldErrorRetryable)
+	}
+	if m.started_at != nil {
+		fields = append(fields, imagejob.FieldStartedAt)
+	}
+	if m.finished_at != nil {
+		fields = append(fields, imagejob.FieldFinishedAt)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, imagejob.FieldExpiresAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ImageJobMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case imagejob.FieldCreatedAt:
+		return m.CreatedAt()
+	case imagejob.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case imagejob.FieldPublicID:
+		return m.PublicID()
+	case imagejob.FieldUserID:
+		return m.UserID()
+	case imagejob.FieldAPIKeyID:
+		return m.APIKeyID()
+	case imagejob.FieldGroupID:
+		return m.GroupID()
+	case imagejob.FieldEndpoint:
+		return m.Endpoint()
+	case imagejob.FieldOperation:
+		return m.Operation()
+	case imagejob.FieldMode:
+		return m.Mode()
+	case imagejob.FieldRequestedModel:
+		return m.RequestedModel()
+	case imagejob.FieldMappedModel:
+		return m.MappedModel()
+	case imagejob.FieldStatus:
+		return m.Status()
+	case imagejob.FieldRequestedCount:
+		return m.RequestedCount()
+	case imagejob.FieldCompletedCount:
+		return m.CompletedCount()
+	case imagejob.FieldRequest:
+		return m.Request()
+	case imagejob.FieldRequestDigest:
+		return m.RequestDigest()
+	case imagejob.FieldIdempotencyKeyHash:
+		return m.IdempotencyKeyHash()
+	case imagejob.FieldReservedUsd:
+		return m.ReservedUsd()
+	case imagejob.FieldReservationBillingType:
+		return m.ReservationBillingType()
+	case imagejob.FieldReservationSubscriptionID:
+		return m.ReservationSubscriptionID()
+	case imagejob.FieldReservationStatus:
+		return m.ReservationStatus()
+	case imagejob.FieldUsage:
+		return m.Usage()
+	case imagejob.FieldSettlementStatus:
+		return m.SettlementStatus()
+	case imagejob.FieldAttemptID:
+		return m.AttemptID()
+	case imagejob.FieldWorkerID:
+		return m.WorkerID()
+	case imagejob.FieldExecutionPhase:
+		return m.ExecutionPhase()
+	case imagejob.FieldHeartbeatAt:
+		return m.HeartbeatAt()
+	case imagejob.FieldCancelRequestedAt:
+		return m.CancelRequestedAt()
+	case imagejob.FieldCanceledAt:
+		return m.CanceledAt()
+	case imagejob.FieldErrorType:
+		return m.ErrorType()
+	case imagejob.FieldErrorCode:
+		return m.ErrorCode()
+	case imagejob.FieldErrorMessage:
+		return m.ErrorMessage()
+	case imagejob.FieldErrorRetryable:
+		return m.ErrorRetryable()
+	case imagejob.FieldStartedAt:
+		return m.StartedAt()
+	case imagejob.FieldFinishedAt:
+		return m.FinishedAt()
+	case imagejob.FieldExpiresAt:
+		return m.ExpiresAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ImageJobMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case imagejob.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case imagejob.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case imagejob.FieldPublicID:
+		return m.OldPublicID(ctx)
+	case imagejob.FieldUserID:
+		return m.OldUserID(ctx)
+	case imagejob.FieldAPIKeyID:
+		return m.OldAPIKeyID(ctx)
+	case imagejob.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case imagejob.FieldEndpoint:
+		return m.OldEndpoint(ctx)
+	case imagejob.FieldOperation:
+		return m.OldOperation(ctx)
+	case imagejob.FieldMode:
+		return m.OldMode(ctx)
+	case imagejob.FieldRequestedModel:
+		return m.OldRequestedModel(ctx)
+	case imagejob.FieldMappedModel:
+		return m.OldMappedModel(ctx)
+	case imagejob.FieldStatus:
+		return m.OldStatus(ctx)
+	case imagejob.FieldRequestedCount:
+		return m.OldRequestedCount(ctx)
+	case imagejob.FieldCompletedCount:
+		return m.OldCompletedCount(ctx)
+	case imagejob.FieldRequest:
+		return m.OldRequest(ctx)
+	case imagejob.FieldRequestDigest:
+		return m.OldRequestDigest(ctx)
+	case imagejob.FieldIdempotencyKeyHash:
+		return m.OldIdempotencyKeyHash(ctx)
+	case imagejob.FieldReservedUsd:
+		return m.OldReservedUsd(ctx)
+	case imagejob.FieldReservationBillingType:
+		return m.OldReservationBillingType(ctx)
+	case imagejob.FieldReservationSubscriptionID:
+		return m.OldReservationSubscriptionID(ctx)
+	case imagejob.FieldReservationStatus:
+		return m.OldReservationStatus(ctx)
+	case imagejob.FieldUsage:
+		return m.OldUsage(ctx)
+	case imagejob.FieldSettlementStatus:
+		return m.OldSettlementStatus(ctx)
+	case imagejob.FieldAttemptID:
+		return m.OldAttemptID(ctx)
+	case imagejob.FieldWorkerID:
+		return m.OldWorkerID(ctx)
+	case imagejob.FieldExecutionPhase:
+		return m.OldExecutionPhase(ctx)
+	case imagejob.FieldHeartbeatAt:
+		return m.OldHeartbeatAt(ctx)
+	case imagejob.FieldCancelRequestedAt:
+		return m.OldCancelRequestedAt(ctx)
+	case imagejob.FieldCanceledAt:
+		return m.OldCanceledAt(ctx)
+	case imagejob.FieldErrorType:
+		return m.OldErrorType(ctx)
+	case imagejob.FieldErrorCode:
+		return m.OldErrorCode(ctx)
+	case imagejob.FieldErrorMessage:
+		return m.OldErrorMessage(ctx)
+	case imagejob.FieldErrorRetryable:
+		return m.OldErrorRetryable(ctx)
+	case imagejob.FieldStartedAt:
+		return m.OldStartedAt(ctx)
+	case imagejob.FieldFinishedAt:
+		return m.OldFinishedAt(ctx)
+	case imagejob.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown ImageJob field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ImageJobMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case imagejob.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case imagejob.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case imagejob.FieldPublicID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPublicID(v)
+		return nil
+	case imagejob.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case imagejob.FieldAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAPIKeyID(v)
+		return nil
+	case imagejob.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case imagejob.FieldEndpoint:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEndpoint(v)
+		return nil
+	case imagejob.FieldOperation:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOperation(v)
+		return nil
+	case imagejob.FieldMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMode(v)
+		return nil
+	case imagejob.FieldRequestedModel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestedModel(v)
+		return nil
+	case imagejob.FieldMappedModel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMappedModel(v)
+		return nil
+	case imagejob.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case imagejob.FieldRequestedCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestedCount(v)
+		return nil
+	case imagejob.FieldCompletedCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompletedCount(v)
+		return nil
+	case imagejob.FieldRequest:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequest(v)
+		return nil
+	case imagejob.FieldRequestDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestDigest(v)
+		return nil
+	case imagejob.FieldIdempotencyKeyHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIdempotencyKeyHash(v)
+		return nil
+	case imagejob.FieldReservedUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReservedUsd(v)
+		return nil
+	case imagejob.FieldReservationBillingType:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReservationBillingType(v)
+		return nil
+	case imagejob.FieldReservationSubscriptionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReservationSubscriptionID(v)
+		return nil
+	case imagejob.FieldReservationStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReservationStatus(v)
+		return nil
+	case imagejob.FieldUsage:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUsage(v)
+		return nil
+	case imagejob.FieldSettlementStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSettlementStatus(v)
+		return nil
+	case imagejob.FieldAttemptID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttemptID(v)
+		return nil
+	case imagejob.FieldWorkerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkerID(v)
+		return nil
+	case imagejob.FieldExecutionPhase:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutionPhase(v)
+		return nil
+	case imagejob.FieldHeartbeatAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeartbeatAt(v)
+		return nil
+	case imagejob.FieldCancelRequestedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCancelRequestedAt(v)
+		return nil
+	case imagejob.FieldCanceledAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCanceledAt(v)
+		return nil
+	case imagejob.FieldErrorType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorType(v)
+		return nil
+	case imagejob.FieldErrorCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorCode(v)
+		return nil
+	case imagejob.FieldErrorMessage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorMessage(v)
+		return nil
+	case imagejob.FieldErrorRetryable:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorRetryable(v)
+		return nil
+	case imagejob.FieldStartedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartedAt(v)
+		return nil
+	case imagejob.FieldFinishedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFinishedAt(v)
+		return nil
+	case imagejob.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJob field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ImageJobMutation) AddedFields() []string {
+	var fields []string
+	if m.addrequested_count != nil {
+		fields = append(fields, imagejob.FieldRequestedCount)
+	}
+	if m.addcompleted_count != nil {
+		fields = append(fields, imagejob.FieldCompletedCount)
+	}
+	if m.addreserved_usd != nil {
+		fields = append(fields, imagejob.FieldReservedUsd)
+	}
+	if m.addreservation_billing_type != nil {
+		fields = append(fields, imagejob.FieldReservationBillingType)
+	}
+	if m.addreservation_subscription_id != nil {
+		fields = append(fields, imagejob.FieldReservationSubscriptionID)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ImageJobMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case imagejob.FieldRequestedCount:
+		return m.AddedRequestedCount()
+	case imagejob.FieldCompletedCount:
+		return m.AddedCompletedCount()
+	case imagejob.FieldReservedUsd:
+		return m.AddedReservedUsd()
+	case imagejob.FieldReservationBillingType:
+		return m.AddedReservationBillingType()
+	case imagejob.FieldReservationSubscriptionID:
+		return m.AddedReservationSubscriptionID()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ImageJobMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case imagejob.FieldRequestedCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRequestedCount(v)
+		return nil
+	case imagejob.FieldCompletedCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompletedCount(v)
+		return nil
+	case imagejob.FieldReservedUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddReservedUsd(v)
+		return nil
+	case imagejob.FieldReservationBillingType:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddReservationBillingType(v)
+		return nil
+	case imagejob.FieldReservationSubscriptionID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddReservationSubscriptionID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJob numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ImageJobMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(imagejob.FieldIdempotencyKeyHash) {
+		fields = append(fields, imagejob.FieldIdempotencyKeyHash)
+	}
+	if m.FieldCleared(imagejob.FieldReservationSubscriptionID) {
+		fields = append(fields, imagejob.FieldReservationSubscriptionID)
+	}
+	if m.FieldCleared(imagejob.FieldUsage) {
+		fields = append(fields, imagejob.FieldUsage)
+	}
+	if m.FieldCleared(imagejob.FieldAttemptID) {
+		fields = append(fields, imagejob.FieldAttemptID)
+	}
+	if m.FieldCleared(imagejob.FieldWorkerID) {
+		fields = append(fields, imagejob.FieldWorkerID)
+	}
+	if m.FieldCleared(imagejob.FieldHeartbeatAt) {
+		fields = append(fields, imagejob.FieldHeartbeatAt)
+	}
+	if m.FieldCleared(imagejob.FieldCancelRequestedAt) {
+		fields = append(fields, imagejob.FieldCancelRequestedAt)
+	}
+	if m.FieldCleared(imagejob.FieldCanceledAt) {
+		fields = append(fields, imagejob.FieldCanceledAt)
+	}
+	if m.FieldCleared(imagejob.FieldErrorType) {
+		fields = append(fields, imagejob.FieldErrorType)
+	}
+	if m.FieldCleared(imagejob.FieldErrorCode) {
+		fields = append(fields, imagejob.FieldErrorCode)
+	}
+	if m.FieldCleared(imagejob.FieldErrorMessage) {
+		fields = append(fields, imagejob.FieldErrorMessage)
+	}
+	if m.FieldCleared(imagejob.FieldStartedAt) {
+		fields = append(fields, imagejob.FieldStartedAt)
+	}
+	if m.FieldCleared(imagejob.FieldFinishedAt) {
+		fields = append(fields, imagejob.FieldFinishedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ImageJobMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ImageJobMutation) ClearField(name string) error {
+	switch name {
+	case imagejob.FieldIdempotencyKeyHash:
+		m.ClearIdempotencyKeyHash()
+		return nil
+	case imagejob.FieldReservationSubscriptionID:
+		m.ClearReservationSubscriptionID()
+		return nil
+	case imagejob.FieldUsage:
+		m.ClearUsage()
+		return nil
+	case imagejob.FieldAttemptID:
+		m.ClearAttemptID()
+		return nil
+	case imagejob.FieldWorkerID:
+		m.ClearWorkerID()
+		return nil
+	case imagejob.FieldHeartbeatAt:
+		m.ClearHeartbeatAt()
+		return nil
+	case imagejob.FieldCancelRequestedAt:
+		m.ClearCancelRequestedAt()
+		return nil
+	case imagejob.FieldCanceledAt:
+		m.ClearCanceledAt()
+		return nil
+	case imagejob.FieldErrorType:
+		m.ClearErrorType()
+		return nil
+	case imagejob.FieldErrorCode:
+		m.ClearErrorCode()
+		return nil
+	case imagejob.FieldErrorMessage:
+		m.ClearErrorMessage()
+		return nil
+	case imagejob.FieldStartedAt:
+		m.ClearStartedAt()
+		return nil
+	case imagejob.FieldFinishedAt:
+		m.ClearFinishedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJob nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ImageJobMutation) ResetField(name string) error {
+	switch name {
+	case imagejob.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case imagejob.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case imagejob.FieldPublicID:
+		m.ResetPublicID()
+		return nil
+	case imagejob.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case imagejob.FieldAPIKeyID:
+		m.ResetAPIKeyID()
+		return nil
+	case imagejob.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case imagejob.FieldEndpoint:
+		m.ResetEndpoint()
+		return nil
+	case imagejob.FieldOperation:
+		m.ResetOperation()
+		return nil
+	case imagejob.FieldMode:
+		m.ResetMode()
+		return nil
+	case imagejob.FieldRequestedModel:
+		m.ResetRequestedModel()
+		return nil
+	case imagejob.FieldMappedModel:
+		m.ResetMappedModel()
+		return nil
+	case imagejob.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case imagejob.FieldRequestedCount:
+		m.ResetRequestedCount()
+		return nil
+	case imagejob.FieldCompletedCount:
+		m.ResetCompletedCount()
+		return nil
+	case imagejob.FieldRequest:
+		m.ResetRequest()
+		return nil
+	case imagejob.FieldRequestDigest:
+		m.ResetRequestDigest()
+		return nil
+	case imagejob.FieldIdempotencyKeyHash:
+		m.ResetIdempotencyKeyHash()
+		return nil
+	case imagejob.FieldReservedUsd:
+		m.ResetReservedUsd()
+		return nil
+	case imagejob.FieldReservationBillingType:
+		m.ResetReservationBillingType()
+		return nil
+	case imagejob.FieldReservationSubscriptionID:
+		m.ResetReservationSubscriptionID()
+		return nil
+	case imagejob.FieldReservationStatus:
+		m.ResetReservationStatus()
+		return nil
+	case imagejob.FieldUsage:
+		m.ResetUsage()
+		return nil
+	case imagejob.FieldSettlementStatus:
+		m.ResetSettlementStatus()
+		return nil
+	case imagejob.FieldAttemptID:
+		m.ResetAttemptID()
+		return nil
+	case imagejob.FieldWorkerID:
+		m.ResetWorkerID()
+		return nil
+	case imagejob.FieldExecutionPhase:
+		m.ResetExecutionPhase()
+		return nil
+	case imagejob.FieldHeartbeatAt:
+		m.ResetHeartbeatAt()
+		return nil
+	case imagejob.FieldCancelRequestedAt:
+		m.ResetCancelRequestedAt()
+		return nil
+	case imagejob.FieldCanceledAt:
+		m.ResetCanceledAt()
+		return nil
+	case imagejob.FieldErrorType:
+		m.ResetErrorType()
+		return nil
+	case imagejob.FieldErrorCode:
+		m.ResetErrorCode()
+		return nil
+	case imagejob.FieldErrorMessage:
+		m.ResetErrorMessage()
+		return nil
+	case imagejob.FieldErrorRetryable:
+		m.ResetErrorRetryable()
+		return nil
+	case imagejob.FieldStartedAt:
+		m.ResetStartedAt()
+		return nil
+	case imagejob.FieldFinishedAt:
+		m.ResetFinishedAt()
+		return nil
+	case imagejob.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJob field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ImageJobMutation) AddedEdges() []string {
+	edges := make([]string, 0, 5)
+	if m.user != nil {
+		edges = append(edges, imagejob.EdgeUser)
+	}
+	if m.api_key != nil {
+		edges = append(edges, imagejob.EdgeAPIKey)
+	}
+	if m.group != nil {
+		edges = append(edges, imagejob.EdgeGroup)
+	}
+	if m.inputs != nil {
+		edges = append(edges, imagejob.EdgeInputs)
+	}
+	if m.results != nil {
+		edges = append(edges, imagejob.EdgeResults)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ImageJobMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case imagejob.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	case imagejob.EdgeAPIKey:
+		if id := m.api_key; id != nil {
+			return []ent.Value{*id}
+		}
+	case imagejob.EdgeGroup:
+		if id := m.group; id != nil {
+			return []ent.Value{*id}
+		}
+	case imagejob.EdgeInputs:
+		ids := make([]ent.Value, 0, len(m.inputs))
+		for id := range m.inputs {
+			ids = append(ids, id)
+		}
+		return ids
+	case imagejob.EdgeResults:
+		ids := make([]ent.Value, 0, len(m.results))
+		for id := range m.results {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ImageJobMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 5)
+	if m.removedinputs != nil {
+		edges = append(edges, imagejob.EdgeInputs)
+	}
+	if m.removedresults != nil {
+		edges = append(edges, imagejob.EdgeResults)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ImageJobMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case imagejob.EdgeInputs:
+		ids := make([]ent.Value, 0, len(m.removedinputs))
+		for id := range m.removedinputs {
+			ids = append(ids, id)
+		}
+		return ids
+	case imagejob.EdgeResults:
+		ids := make([]ent.Value, 0, len(m.removedresults))
+		for id := range m.removedresults {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ImageJobMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 5)
+	if m.cleareduser {
+		edges = append(edges, imagejob.EdgeUser)
+	}
+	if m.clearedapi_key {
+		edges = append(edges, imagejob.EdgeAPIKey)
+	}
+	if m.clearedgroup {
+		edges = append(edges, imagejob.EdgeGroup)
+	}
+	if m.clearedinputs {
+		edges = append(edges, imagejob.EdgeInputs)
+	}
+	if m.clearedresults {
+		edges = append(edges, imagejob.EdgeResults)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ImageJobMutation) EdgeCleared(name string) bool {
+	switch name {
+	case imagejob.EdgeUser:
+		return m.cleareduser
+	case imagejob.EdgeAPIKey:
+		return m.clearedapi_key
+	case imagejob.EdgeGroup:
+		return m.clearedgroup
+	case imagejob.EdgeInputs:
+		return m.clearedinputs
+	case imagejob.EdgeResults:
+		return m.clearedresults
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ImageJobMutation) ClearEdge(name string) error {
+	switch name {
+	case imagejob.EdgeUser:
+		m.ClearUser()
+		return nil
+	case imagejob.EdgeAPIKey:
+		m.ClearAPIKey()
+		return nil
+	case imagejob.EdgeGroup:
+		m.ClearGroup()
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJob unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ImageJobMutation) ResetEdge(name string) error {
+	switch name {
+	case imagejob.EdgeUser:
+		m.ResetUser()
+		return nil
+	case imagejob.EdgeAPIKey:
+		m.ResetAPIKey()
+		return nil
+	case imagejob.EdgeGroup:
+		m.ResetGroup()
+		return nil
+	case imagejob.EdgeInputs:
+		m.ResetInputs()
+		return nil
+	case imagejob.EdgeResults:
+		m.ResetResults()
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJob edge %s", name)
+}
+
+// ImageJobInputMutation represents an operation that mutates the ImageJobInput nodes in the graph.
+type ImageJobInputMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int64
+	index         *int
+	addindex      *int
+	kind          *string
+	object_key    *string
+	mime_type     *string
+	byte_size     *int64
+	addbyte_size  *int64
+	sha256        *string
+	created_at    *time.Time
+	clearedFields map[string]struct{}
+	job           *int64
+	clearedjob    bool
+	done          bool
+	oldValue      func(context.Context) (*ImageJobInput, error)
+	predicates    []predicate.ImageJobInput
+}
+
+var _ ent.Mutation = (*ImageJobInputMutation)(nil)
+
+// imagejobinputOption allows management of the mutation configuration using functional options.
+type imagejobinputOption func(*ImageJobInputMutation)
+
+// newImageJobInputMutation creates new mutation for the ImageJobInput entity.
+func newImageJobInputMutation(c config, op Op, opts ...imagejobinputOption) *ImageJobInputMutation {
+	m := &ImageJobInputMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeImageJobInput,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withImageJobInputID sets the ID field of the mutation.
+func withImageJobInputID(id int64) imagejobinputOption {
+	return func(m *ImageJobInputMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ImageJobInput
+		)
+		m.oldValue = func(ctx context.Context) (*ImageJobInput, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ImageJobInput.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withImageJobInput sets the old ImageJobInput of the mutation.
+func withImageJobInput(node *ImageJobInput) imagejobinputOption {
+	return func(m *ImageJobInputMutation) {
+		m.oldValue = func(context.Context) (*ImageJobInput, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ImageJobInputMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ImageJobInputMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ImageJobInputMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ImageJobInputMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ImageJobInput.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetJobID sets the "job_id" field.
+func (m *ImageJobInputMutation) SetJobID(i int64) {
+	m.job = &i
+}
+
+// JobID returns the value of the "job_id" field in the mutation.
+func (m *ImageJobInputMutation) JobID() (r int64, exists bool) {
+	v := m.job
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldJobID returns the old "job_id" field's value of the ImageJobInput entity.
+// If the ImageJobInput object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobInputMutation) OldJobID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldJobID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldJobID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldJobID: %w", err)
+	}
+	return oldValue.JobID, nil
+}
+
+// ResetJobID resets all changes to the "job_id" field.
+func (m *ImageJobInputMutation) ResetJobID() {
+	m.job = nil
+}
+
+// SetIndex sets the "index" field.
+func (m *ImageJobInputMutation) SetIndex(i int) {
+	m.index = &i
+	m.addindex = nil
+}
+
+// Index returns the value of the "index" field in the mutation.
+func (m *ImageJobInputMutation) Index() (r int, exists bool) {
+	v := m.index
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIndex returns the old "index" field's value of the ImageJobInput entity.
+// If the ImageJobInput object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobInputMutation) OldIndex(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIndex is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIndex requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIndex: %w", err)
+	}
+	return oldValue.Index, nil
+}
+
+// AddIndex adds i to the "index" field.
+func (m *ImageJobInputMutation) AddIndex(i int) {
+	if m.addindex != nil {
+		*m.addindex += i
+	} else {
+		m.addindex = &i
+	}
+}
+
+// AddedIndex returns the value that was added to the "index" field in this mutation.
+func (m *ImageJobInputMutation) AddedIndex() (r int, exists bool) {
+	v := m.addindex
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetIndex resets all changes to the "index" field.
+func (m *ImageJobInputMutation) ResetIndex() {
+	m.index = nil
+	m.addindex = nil
+}
+
+// SetKind sets the "kind" field.
+func (m *ImageJobInputMutation) SetKind(s string) {
+	m.kind = &s
+}
+
+// Kind returns the value of the "kind" field in the mutation.
+func (m *ImageJobInputMutation) Kind() (r string, exists bool) {
+	v := m.kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKind returns the old "kind" field's value of the ImageJobInput entity.
+// If the ImageJobInput object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobInputMutation) OldKind(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKind: %w", err)
+	}
+	return oldValue.Kind, nil
+}
+
+// ResetKind resets all changes to the "kind" field.
+func (m *ImageJobInputMutation) ResetKind() {
+	m.kind = nil
+}
+
+// SetObjectKey sets the "object_key" field.
+func (m *ImageJobInputMutation) SetObjectKey(s string) {
+	m.object_key = &s
+}
+
+// ObjectKey returns the value of the "object_key" field in the mutation.
+func (m *ImageJobInputMutation) ObjectKey() (r string, exists bool) {
+	v := m.object_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldObjectKey returns the old "object_key" field's value of the ImageJobInput entity.
+// If the ImageJobInput object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobInputMutation) OldObjectKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldObjectKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldObjectKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldObjectKey: %w", err)
+	}
+	return oldValue.ObjectKey, nil
+}
+
+// ResetObjectKey resets all changes to the "object_key" field.
+func (m *ImageJobInputMutation) ResetObjectKey() {
+	m.object_key = nil
+}
+
+// SetMimeType sets the "mime_type" field.
+func (m *ImageJobInputMutation) SetMimeType(s string) {
+	m.mime_type = &s
+}
+
+// MimeType returns the value of the "mime_type" field in the mutation.
+func (m *ImageJobInputMutation) MimeType() (r string, exists bool) {
+	v := m.mime_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMimeType returns the old "mime_type" field's value of the ImageJobInput entity.
+// If the ImageJobInput object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobInputMutation) OldMimeType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMimeType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMimeType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMimeType: %w", err)
+	}
+	return oldValue.MimeType, nil
+}
+
+// ResetMimeType resets all changes to the "mime_type" field.
+func (m *ImageJobInputMutation) ResetMimeType() {
+	m.mime_type = nil
+}
+
+// SetByteSize sets the "byte_size" field.
+func (m *ImageJobInputMutation) SetByteSize(i int64) {
+	m.byte_size = &i
+	m.addbyte_size = nil
+}
+
+// ByteSize returns the value of the "byte_size" field in the mutation.
+func (m *ImageJobInputMutation) ByteSize() (r int64, exists bool) {
+	v := m.byte_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldByteSize returns the old "byte_size" field's value of the ImageJobInput entity.
+// If the ImageJobInput object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobInputMutation) OldByteSize(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldByteSize is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldByteSize requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldByteSize: %w", err)
+	}
+	return oldValue.ByteSize, nil
+}
+
+// AddByteSize adds i to the "byte_size" field.
+func (m *ImageJobInputMutation) AddByteSize(i int64) {
+	if m.addbyte_size != nil {
+		*m.addbyte_size += i
+	} else {
+		m.addbyte_size = &i
+	}
+}
+
+// AddedByteSize returns the value that was added to the "byte_size" field in this mutation.
+func (m *ImageJobInputMutation) AddedByteSize() (r int64, exists bool) {
+	v := m.addbyte_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetByteSize resets all changes to the "byte_size" field.
+func (m *ImageJobInputMutation) ResetByteSize() {
+	m.byte_size = nil
+	m.addbyte_size = nil
+}
+
+// SetSha256 sets the "sha256" field.
+func (m *ImageJobInputMutation) SetSha256(s string) {
+	m.sha256 = &s
+}
+
+// Sha256 returns the value of the "sha256" field in the mutation.
+func (m *ImageJobInputMutation) Sha256() (r string, exists bool) {
+	v := m.sha256
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSha256 returns the old "sha256" field's value of the ImageJobInput entity.
+// If the ImageJobInput object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobInputMutation) OldSha256(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSha256 is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSha256 requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSha256: %w", err)
+	}
+	return oldValue.Sha256, nil
+}
+
+// ResetSha256 resets all changes to the "sha256" field.
+func (m *ImageJobInputMutation) ResetSha256() {
+	m.sha256 = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ImageJobInputMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ImageJobInputMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ImageJobInput entity.
+// If the ImageJobInput object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobInputMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ImageJobInputMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// ClearJob clears the "job" edge to the ImageJob entity.
+func (m *ImageJobInputMutation) ClearJob() {
+	m.clearedjob = true
+	m.clearedFields[imagejobinput.FieldJobID] = struct{}{}
+}
+
+// JobCleared reports if the "job" edge to the ImageJob entity was cleared.
+func (m *ImageJobInputMutation) JobCleared() bool {
+	return m.clearedjob
+}
+
+// JobIDs returns the "job" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// JobID instead. It exists only for internal usage by the builders.
+func (m *ImageJobInputMutation) JobIDs() (ids []int64) {
+	if id := m.job; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetJob resets all changes to the "job" edge.
+func (m *ImageJobInputMutation) ResetJob() {
+	m.job = nil
+	m.clearedjob = false
+}
+
+// Where appends a list predicates to the ImageJobInputMutation builder.
+func (m *ImageJobInputMutation) Where(ps ...predicate.ImageJobInput) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ImageJobInputMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ImageJobInputMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ImageJobInput, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ImageJobInputMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ImageJobInputMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ImageJobInput).
+func (m *ImageJobInputMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ImageJobInputMutation) Fields() []string {
+	fields := make([]string, 0, 8)
+	if m.job != nil {
+		fields = append(fields, imagejobinput.FieldJobID)
+	}
+	if m.index != nil {
+		fields = append(fields, imagejobinput.FieldIndex)
+	}
+	if m.kind != nil {
+		fields = append(fields, imagejobinput.FieldKind)
+	}
+	if m.object_key != nil {
+		fields = append(fields, imagejobinput.FieldObjectKey)
+	}
+	if m.mime_type != nil {
+		fields = append(fields, imagejobinput.FieldMimeType)
+	}
+	if m.byte_size != nil {
+		fields = append(fields, imagejobinput.FieldByteSize)
+	}
+	if m.sha256 != nil {
+		fields = append(fields, imagejobinput.FieldSha256)
+	}
+	if m.created_at != nil {
+		fields = append(fields, imagejobinput.FieldCreatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ImageJobInputMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case imagejobinput.FieldJobID:
+		return m.JobID()
+	case imagejobinput.FieldIndex:
+		return m.Index()
+	case imagejobinput.FieldKind:
+		return m.Kind()
+	case imagejobinput.FieldObjectKey:
+		return m.ObjectKey()
+	case imagejobinput.FieldMimeType:
+		return m.MimeType()
+	case imagejobinput.FieldByteSize:
+		return m.ByteSize()
+	case imagejobinput.FieldSha256:
+		return m.Sha256()
+	case imagejobinput.FieldCreatedAt:
+		return m.CreatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ImageJobInputMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case imagejobinput.FieldJobID:
+		return m.OldJobID(ctx)
+	case imagejobinput.FieldIndex:
+		return m.OldIndex(ctx)
+	case imagejobinput.FieldKind:
+		return m.OldKind(ctx)
+	case imagejobinput.FieldObjectKey:
+		return m.OldObjectKey(ctx)
+	case imagejobinput.FieldMimeType:
+		return m.OldMimeType(ctx)
+	case imagejobinput.FieldByteSize:
+		return m.OldByteSize(ctx)
+	case imagejobinput.FieldSha256:
+		return m.OldSha256(ctx)
+	case imagejobinput.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown ImageJobInput field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ImageJobInputMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case imagejobinput.FieldJobID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetJobID(v)
+		return nil
+	case imagejobinput.FieldIndex:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIndex(v)
+		return nil
+	case imagejobinput.FieldKind:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKind(v)
+		return nil
+	case imagejobinput.FieldObjectKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetObjectKey(v)
+		return nil
+	case imagejobinput.FieldMimeType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMimeType(v)
+		return nil
+	case imagejobinput.FieldByteSize:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetByteSize(v)
+		return nil
+	case imagejobinput.FieldSha256:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSha256(v)
+		return nil
+	case imagejobinput.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJobInput field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ImageJobInputMutation) AddedFields() []string {
+	var fields []string
+	if m.addindex != nil {
+		fields = append(fields, imagejobinput.FieldIndex)
+	}
+	if m.addbyte_size != nil {
+		fields = append(fields, imagejobinput.FieldByteSize)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ImageJobInputMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case imagejobinput.FieldIndex:
+		return m.AddedIndex()
+	case imagejobinput.FieldByteSize:
+		return m.AddedByteSize()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ImageJobInputMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case imagejobinput.FieldIndex:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddIndex(v)
+		return nil
+	case imagejobinput.FieldByteSize:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddByteSize(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJobInput numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ImageJobInputMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ImageJobInputMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ImageJobInputMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown ImageJobInput nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ImageJobInputMutation) ResetField(name string) error {
+	switch name {
+	case imagejobinput.FieldJobID:
+		m.ResetJobID()
+		return nil
+	case imagejobinput.FieldIndex:
+		m.ResetIndex()
+		return nil
+	case imagejobinput.FieldKind:
+		m.ResetKind()
+		return nil
+	case imagejobinput.FieldObjectKey:
+		m.ResetObjectKey()
+		return nil
+	case imagejobinput.FieldMimeType:
+		m.ResetMimeType()
+		return nil
+	case imagejobinput.FieldByteSize:
+		m.ResetByteSize()
+		return nil
+	case imagejobinput.FieldSha256:
+		m.ResetSha256()
+		return nil
+	case imagejobinput.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJobInput field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ImageJobInputMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.job != nil {
+		edges = append(edges, imagejobinput.EdgeJob)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ImageJobInputMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case imagejobinput.EdgeJob:
+		if id := m.job; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ImageJobInputMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ImageJobInputMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ImageJobInputMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedjob {
+		edges = append(edges, imagejobinput.EdgeJob)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ImageJobInputMutation) EdgeCleared(name string) bool {
+	switch name {
+	case imagejobinput.EdgeJob:
+		return m.clearedjob
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ImageJobInputMutation) ClearEdge(name string) error {
+	switch name {
+	case imagejobinput.EdgeJob:
+		m.ClearJob()
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJobInput unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ImageJobInputMutation) ResetEdge(name string) error {
+	switch name {
+	case imagejobinput.EdgeJob:
+		m.ResetJob()
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJobInput edge %s", name)
+}
+
+// ImageJobResultMutation represents an operation that mutates the ImageJobResult nodes in the graph.
+type ImageJobResultMutation struct {
+	config
+	op                 Op
+	typ                string
+	id                 *int64
+	created_at         *time.Time
+	updated_at         *time.Time
+	index              *int
+	addindex           *int
+	status             *string
+	object_key         *string
+	mime_type          *string
+	byte_size          *int64
+	addbyte_size       *int64
+	width              *int
+	addwidth           *int
+	height             *int
+	addheight          *int
+	size_tier          *string
+	revised_prompt     *string
+	upstream_output_id *string
+	clearedFields      map[string]struct{}
+	job                *int64
+	clearedjob         bool
+	done               bool
+	oldValue           func(context.Context) (*ImageJobResult, error)
+	predicates         []predicate.ImageJobResult
+}
+
+var _ ent.Mutation = (*ImageJobResultMutation)(nil)
+
+// imagejobresultOption allows management of the mutation configuration using functional options.
+type imagejobresultOption func(*ImageJobResultMutation)
+
+// newImageJobResultMutation creates new mutation for the ImageJobResult entity.
+func newImageJobResultMutation(c config, op Op, opts ...imagejobresultOption) *ImageJobResultMutation {
+	m := &ImageJobResultMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeImageJobResult,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withImageJobResultID sets the ID field of the mutation.
+func withImageJobResultID(id int64) imagejobresultOption {
+	return func(m *ImageJobResultMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ImageJobResult
+		)
+		m.oldValue = func(ctx context.Context) (*ImageJobResult, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ImageJobResult.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withImageJobResult sets the old ImageJobResult of the mutation.
+func withImageJobResult(node *ImageJobResult) imagejobresultOption {
+	return func(m *ImageJobResultMutation) {
+		m.oldValue = func(context.Context) (*ImageJobResult, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ImageJobResultMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ImageJobResultMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ImageJobResultMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ImageJobResultMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ImageJobResult.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ImageJobResultMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ImageJobResultMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ImageJobResult entity.
+// If the ImageJobResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobResultMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ImageJobResultMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ImageJobResultMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ImageJobResultMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ImageJobResult entity.
+// If the ImageJobResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobResultMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ImageJobResultMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetJobID sets the "job_id" field.
+func (m *ImageJobResultMutation) SetJobID(i int64) {
+	m.job = &i
+}
+
+// JobID returns the value of the "job_id" field in the mutation.
+func (m *ImageJobResultMutation) JobID() (r int64, exists bool) {
+	v := m.job
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldJobID returns the old "job_id" field's value of the ImageJobResult entity.
+// If the ImageJobResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobResultMutation) OldJobID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldJobID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldJobID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldJobID: %w", err)
+	}
+	return oldValue.JobID, nil
+}
+
+// ResetJobID resets all changes to the "job_id" field.
+func (m *ImageJobResultMutation) ResetJobID() {
+	m.job = nil
+}
+
+// SetIndex sets the "index" field.
+func (m *ImageJobResultMutation) SetIndex(i int) {
+	m.index = &i
+	m.addindex = nil
+}
+
+// Index returns the value of the "index" field in the mutation.
+func (m *ImageJobResultMutation) Index() (r int, exists bool) {
+	v := m.index
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIndex returns the old "index" field's value of the ImageJobResult entity.
+// If the ImageJobResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobResultMutation) OldIndex(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIndex is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIndex requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIndex: %w", err)
+	}
+	return oldValue.Index, nil
+}
+
+// AddIndex adds i to the "index" field.
+func (m *ImageJobResultMutation) AddIndex(i int) {
+	if m.addindex != nil {
+		*m.addindex += i
+	} else {
+		m.addindex = &i
+	}
+}
+
+// AddedIndex returns the value that was added to the "index" field in this mutation.
+func (m *ImageJobResultMutation) AddedIndex() (r int, exists bool) {
+	v := m.addindex
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetIndex resets all changes to the "index" field.
+func (m *ImageJobResultMutation) ResetIndex() {
+	m.index = nil
+	m.addindex = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *ImageJobResultMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *ImageJobResultMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the ImageJobResult entity.
+// If the ImageJobResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobResultMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *ImageJobResultMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetObjectKey sets the "object_key" field.
+func (m *ImageJobResultMutation) SetObjectKey(s string) {
+	m.object_key = &s
+}
+
+// ObjectKey returns the value of the "object_key" field in the mutation.
+func (m *ImageJobResultMutation) ObjectKey() (r string, exists bool) {
+	v := m.object_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldObjectKey returns the old "object_key" field's value of the ImageJobResult entity.
+// If the ImageJobResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobResultMutation) OldObjectKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldObjectKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldObjectKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldObjectKey: %w", err)
+	}
+	return oldValue.ObjectKey, nil
+}
+
+// ClearObjectKey clears the value of the "object_key" field.
+func (m *ImageJobResultMutation) ClearObjectKey() {
+	m.object_key = nil
+	m.clearedFields[imagejobresult.FieldObjectKey] = struct{}{}
+}
+
+// ObjectKeyCleared returns if the "object_key" field was cleared in this mutation.
+func (m *ImageJobResultMutation) ObjectKeyCleared() bool {
+	_, ok := m.clearedFields[imagejobresult.FieldObjectKey]
+	return ok
+}
+
+// ResetObjectKey resets all changes to the "object_key" field.
+func (m *ImageJobResultMutation) ResetObjectKey() {
+	m.object_key = nil
+	delete(m.clearedFields, imagejobresult.FieldObjectKey)
+}
+
+// SetMimeType sets the "mime_type" field.
+func (m *ImageJobResultMutation) SetMimeType(s string) {
+	m.mime_type = &s
+}
+
+// MimeType returns the value of the "mime_type" field in the mutation.
+func (m *ImageJobResultMutation) MimeType() (r string, exists bool) {
+	v := m.mime_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMimeType returns the old "mime_type" field's value of the ImageJobResult entity.
+// If the ImageJobResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobResultMutation) OldMimeType(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMimeType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMimeType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMimeType: %w", err)
+	}
+	return oldValue.MimeType, nil
+}
+
+// ClearMimeType clears the value of the "mime_type" field.
+func (m *ImageJobResultMutation) ClearMimeType() {
+	m.mime_type = nil
+	m.clearedFields[imagejobresult.FieldMimeType] = struct{}{}
+}
+
+// MimeTypeCleared returns if the "mime_type" field was cleared in this mutation.
+func (m *ImageJobResultMutation) MimeTypeCleared() bool {
+	_, ok := m.clearedFields[imagejobresult.FieldMimeType]
+	return ok
+}
+
+// ResetMimeType resets all changes to the "mime_type" field.
+func (m *ImageJobResultMutation) ResetMimeType() {
+	m.mime_type = nil
+	delete(m.clearedFields, imagejobresult.FieldMimeType)
+}
+
+// SetByteSize sets the "byte_size" field.
+func (m *ImageJobResultMutation) SetByteSize(i int64) {
+	m.byte_size = &i
+	m.addbyte_size = nil
+}
+
+// ByteSize returns the value of the "byte_size" field in the mutation.
+func (m *ImageJobResultMutation) ByteSize() (r int64, exists bool) {
+	v := m.byte_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldByteSize returns the old "byte_size" field's value of the ImageJobResult entity.
+// If the ImageJobResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobResultMutation) OldByteSize(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldByteSize is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldByteSize requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldByteSize: %w", err)
+	}
+	return oldValue.ByteSize, nil
+}
+
+// AddByteSize adds i to the "byte_size" field.
+func (m *ImageJobResultMutation) AddByteSize(i int64) {
+	if m.addbyte_size != nil {
+		*m.addbyte_size += i
+	} else {
+		m.addbyte_size = &i
+	}
+}
+
+// AddedByteSize returns the value that was added to the "byte_size" field in this mutation.
+func (m *ImageJobResultMutation) AddedByteSize() (r int64, exists bool) {
+	v := m.addbyte_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearByteSize clears the value of the "byte_size" field.
+func (m *ImageJobResultMutation) ClearByteSize() {
+	m.byte_size = nil
+	m.addbyte_size = nil
+	m.clearedFields[imagejobresult.FieldByteSize] = struct{}{}
+}
+
+// ByteSizeCleared returns if the "byte_size" field was cleared in this mutation.
+func (m *ImageJobResultMutation) ByteSizeCleared() bool {
+	_, ok := m.clearedFields[imagejobresult.FieldByteSize]
+	return ok
+}
+
+// ResetByteSize resets all changes to the "byte_size" field.
+func (m *ImageJobResultMutation) ResetByteSize() {
+	m.byte_size = nil
+	m.addbyte_size = nil
+	delete(m.clearedFields, imagejobresult.FieldByteSize)
+}
+
+// SetWidth sets the "width" field.
+func (m *ImageJobResultMutation) SetWidth(i int) {
+	m.width = &i
+	m.addwidth = nil
+}
+
+// Width returns the value of the "width" field in the mutation.
+func (m *ImageJobResultMutation) Width() (r int, exists bool) {
+	v := m.width
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWidth returns the old "width" field's value of the ImageJobResult entity.
+// If the ImageJobResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobResultMutation) OldWidth(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWidth is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWidth requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWidth: %w", err)
+	}
+	return oldValue.Width, nil
+}
+
+// AddWidth adds i to the "width" field.
+func (m *ImageJobResultMutation) AddWidth(i int) {
+	if m.addwidth != nil {
+		*m.addwidth += i
+	} else {
+		m.addwidth = &i
+	}
+}
+
+// AddedWidth returns the value that was added to the "width" field in this mutation.
+func (m *ImageJobResultMutation) AddedWidth() (r int, exists bool) {
+	v := m.addwidth
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearWidth clears the value of the "width" field.
+func (m *ImageJobResultMutation) ClearWidth() {
+	m.width = nil
+	m.addwidth = nil
+	m.clearedFields[imagejobresult.FieldWidth] = struct{}{}
+}
+
+// WidthCleared returns if the "width" field was cleared in this mutation.
+func (m *ImageJobResultMutation) WidthCleared() bool {
+	_, ok := m.clearedFields[imagejobresult.FieldWidth]
+	return ok
+}
+
+// ResetWidth resets all changes to the "width" field.
+func (m *ImageJobResultMutation) ResetWidth() {
+	m.width = nil
+	m.addwidth = nil
+	delete(m.clearedFields, imagejobresult.FieldWidth)
+}
+
+// SetHeight sets the "height" field.
+func (m *ImageJobResultMutation) SetHeight(i int) {
+	m.height = &i
+	m.addheight = nil
+}
+
+// Height returns the value of the "height" field in the mutation.
+func (m *ImageJobResultMutation) Height() (r int, exists bool) {
+	v := m.height
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHeight returns the old "height" field's value of the ImageJobResult entity.
+// If the ImageJobResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobResultMutation) OldHeight(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHeight is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHeight requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHeight: %w", err)
+	}
+	return oldValue.Height, nil
+}
+
+// AddHeight adds i to the "height" field.
+func (m *ImageJobResultMutation) AddHeight(i int) {
+	if m.addheight != nil {
+		*m.addheight += i
+	} else {
+		m.addheight = &i
+	}
+}
+
+// AddedHeight returns the value that was added to the "height" field in this mutation.
+func (m *ImageJobResultMutation) AddedHeight() (r int, exists bool) {
+	v := m.addheight
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearHeight clears the value of the "height" field.
+func (m *ImageJobResultMutation) ClearHeight() {
+	m.height = nil
+	m.addheight = nil
+	m.clearedFields[imagejobresult.FieldHeight] = struct{}{}
+}
+
+// HeightCleared returns if the "height" field was cleared in this mutation.
+func (m *ImageJobResultMutation) HeightCleared() bool {
+	_, ok := m.clearedFields[imagejobresult.FieldHeight]
+	return ok
+}
+
+// ResetHeight resets all changes to the "height" field.
+func (m *ImageJobResultMutation) ResetHeight() {
+	m.height = nil
+	m.addheight = nil
+	delete(m.clearedFields, imagejobresult.FieldHeight)
+}
+
+// SetSizeTier sets the "size_tier" field.
+func (m *ImageJobResultMutation) SetSizeTier(s string) {
+	m.size_tier = &s
+}
+
+// SizeTier returns the value of the "size_tier" field in the mutation.
+func (m *ImageJobResultMutation) SizeTier() (r string, exists bool) {
+	v := m.size_tier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSizeTier returns the old "size_tier" field's value of the ImageJobResult entity.
+// If the ImageJobResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobResultMutation) OldSizeTier(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSizeTier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSizeTier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSizeTier: %w", err)
+	}
+	return oldValue.SizeTier, nil
+}
+
+// ClearSizeTier clears the value of the "size_tier" field.
+func (m *ImageJobResultMutation) ClearSizeTier() {
+	m.size_tier = nil
+	m.clearedFields[imagejobresult.FieldSizeTier] = struct{}{}
+}
+
+// SizeTierCleared returns if the "size_tier" field was cleared in this mutation.
+func (m *ImageJobResultMutation) SizeTierCleared() bool {
+	_, ok := m.clearedFields[imagejobresult.FieldSizeTier]
+	return ok
+}
+
+// ResetSizeTier resets all changes to the "size_tier" field.
+func (m *ImageJobResultMutation) ResetSizeTier() {
+	m.size_tier = nil
+	delete(m.clearedFields, imagejobresult.FieldSizeTier)
+}
+
+// SetRevisedPrompt sets the "revised_prompt" field.
+func (m *ImageJobResultMutation) SetRevisedPrompt(s string) {
+	m.revised_prompt = &s
+}
+
+// RevisedPrompt returns the value of the "revised_prompt" field in the mutation.
+func (m *ImageJobResultMutation) RevisedPrompt() (r string, exists bool) {
+	v := m.revised_prompt
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevisedPrompt returns the old "revised_prompt" field's value of the ImageJobResult entity.
+// If the ImageJobResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobResultMutation) OldRevisedPrompt(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevisedPrompt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevisedPrompt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevisedPrompt: %w", err)
+	}
+	return oldValue.RevisedPrompt, nil
+}
+
+// ClearRevisedPrompt clears the value of the "revised_prompt" field.
+func (m *ImageJobResultMutation) ClearRevisedPrompt() {
+	m.revised_prompt = nil
+	m.clearedFields[imagejobresult.FieldRevisedPrompt] = struct{}{}
+}
+
+// RevisedPromptCleared returns if the "revised_prompt" field was cleared in this mutation.
+func (m *ImageJobResultMutation) RevisedPromptCleared() bool {
+	_, ok := m.clearedFields[imagejobresult.FieldRevisedPrompt]
+	return ok
+}
+
+// ResetRevisedPrompt resets all changes to the "revised_prompt" field.
+func (m *ImageJobResultMutation) ResetRevisedPrompt() {
+	m.revised_prompt = nil
+	delete(m.clearedFields, imagejobresult.FieldRevisedPrompt)
+}
+
+// SetUpstreamOutputID sets the "upstream_output_id" field.
+func (m *ImageJobResultMutation) SetUpstreamOutputID(s string) {
+	m.upstream_output_id = &s
+}
+
+// UpstreamOutputID returns the value of the "upstream_output_id" field in the mutation.
+func (m *ImageJobResultMutation) UpstreamOutputID() (r string, exists bool) {
+	v := m.upstream_output_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpstreamOutputID returns the old "upstream_output_id" field's value of the ImageJobResult entity.
+// If the ImageJobResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ImageJobResultMutation) OldUpstreamOutputID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpstreamOutputID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpstreamOutputID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpstreamOutputID: %w", err)
+	}
+	return oldValue.UpstreamOutputID, nil
+}
+
+// ClearUpstreamOutputID clears the value of the "upstream_output_id" field.
+func (m *ImageJobResultMutation) ClearUpstreamOutputID() {
+	m.upstream_output_id = nil
+	m.clearedFields[imagejobresult.FieldUpstreamOutputID] = struct{}{}
+}
+
+// UpstreamOutputIDCleared returns if the "upstream_output_id" field was cleared in this mutation.
+func (m *ImageJobResultMutation) UpstreamOutputIDCleared() bool {
+	_, ok := m.clearedFields[imagejobresult.FieldUpstreamOutputID]
+	return ok
+}
+
+// ResetUpstreamOutputID resets all changes to the "upstream_output_id" field.
+func (m *ImageJobResultMutation) ResetUpstreamOutputID() {
+	m.upstream_output_id = nil
+	delete(m.clearedFields, imagejobresult.FieldUpstreamOutputID)
+}
+
+// ClearJob clears the "job" edge to the ImageJob entity.
+func (m *ImageJobResultMutation) ClearJob() {
+	m.clearedjob = true
+	m.clearedFields[imagejobresult.FieldJobID] = struct{}{}
+}
+
+// JobCleared reports if the "job" edge to the ImageJob entity was cleared.
+func (m *ImageJobResultMutation) JobCleared() bool {
+	return m.clearedjob
+}
+
+// JobIDs returns the "job" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// JobID instead. It exists only for internal usage by the builders.
+func (m *ImageJobResultMutation) JobIDs() (ids []int64) {
+	if id := m.job; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetJob resets all changes to the "job" edge.
+func (m *ImageJobResultMutation) ResetJob() {
+	m.job = nil
+	m.clearedjob = false
+}
+
+// Where appends a list predicates to the ImageJobResultMutation builder.
+func (m *ImageJobResultMutation) Where(ps ...predicate.ImageJobResult) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ImageJobResultMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ImageJobResultMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ImageJobResult, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ImageJobResultMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ImageJobResultMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ImageJobResult).
+func (m *ImageJobResultMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ImageJobResultMutation) Fields() []string {
+	fields := make([]string, 0, 13)
+	if m.created_at != nil {
+		fields = append(fields, imagejobresult.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, imagejobresult.FieldUpdatedAt)
+	}
+	if m.job != nil {
+		fields = append(fields, imagejobresult.FieldJobID)
+	}
+	if m.index != nil {
+		fields = append(fields, imagejobresult.FieldIndex)
+	}
+	if m.status != nil {
+		fields = append(fields, imagejobresult.FieldStatus)
+	}
+	if m.object_key != nil {
+		fields = append(fields, imagejobresult.FieldObjectKey)
+	}
+	if m.mime_type != nil {
+		fields = append(fields, imagejobresult.FieldMimeType)
+	}
+	if m.byte_size != nil {
+		fields = append(fields, imagejobresult.FieldByteSize)
+	}
+	if m.width != nil {
+		fields = append(fields, imagejobresult.FieldWidth)
+	}
+	if m.height != nil {
+		fields = append(fields, imagejobresult.FieldHeight)
+	}
+	if m.size_tier != nil {
+		fields = append(fields, imagejobresult.FieldSizeTier)
+	}
+	if m.revised_prompt != nil {
+		fields = append(fields, imagejobresult.FieldRevisedPrompt)
+	}
+	if m.upstream_output_id != nil {
+		fields = append(fields, imagejobresult.FieldUpstreamOutputID)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ImageJobResultMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case imagejobresult.FieldCreatedAt:
+		return m.CreatedAt()
+	case imagejobresult.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case imagejobresult.FieldJobID:
+		return m.JobID()
+	case imagejobresult.FieldIndex:
+		return m.Index()
+	case imagejobresult.FieldStatus:
+		return m.Status()
+	case imagejobresult.FieldObjectKey:
+		return m.ObjectKey()
+	case imagejobresult.FieldMimeType:
+		return m.MimeType()
+	case imagejobresult.FieldByteSize:
+		return m.ByteSize()
+	case imagejobresult.FieldWidth:
+		return m.Width()
+	case imagejobresult.FieldHeight:
+		return m.Height()
+	case imagejobresult.FieldSizeTier:
+		return m.SizeTier()
+	case imagejobresult.FieldRevisedPrompt:
+		return m.RevisedPrompt()
+	case imagejobresult.FieldUpstreamOutputID:
+		return m.UpstreamOutputID()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ImageJobResultMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case imagejobresult.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case imagejobresult.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case imagejobresult.FieldJobID:
+		return m.OldJobID(ctx)
+	case imagejobresult.FieldIndex:
+		return m.OldIndex(ctx)
+	case imagejobresult.FieldStatus:
+		return m.OldStatus(ctx)
+	case imagejobresult.FieldObjectKey:
+		return m.OldObjectKey(ctx)
+	case imagejobresult.FieldMimeType:
+		return m.OldMimeType(ctx)
+	case imagejobresult.FieldByteSize:
+		return m.OldByteSize(ctx)
+	case imagejobresult.FieldWidth:
+		return m.OldWidth(ctx)
+	case imagejobresult.FieldHeight:
+		return m.OldHeight(ctx)
+	case imagejobresult.FieldSizeTier:
+		return m.OldSizeTier(ctx)
+	case imagejobresult.FieldRevisedPrompt:
+		return m.OldRevisedPrompt(ctx)
+	case imagejobresult.FieldUpstreamOutputID:
+		return m.OldUpstreamOutputID(ctx)
+	}
+	return nil, fmt.Errorf("unknown ImageJobResult field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ImageJobResultMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case imagejobresult.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case imagejobresult.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case imagejobresult.FieldJobID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetJobID(v)
+		return nil
+	case imagejobresult.FieldIndex:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIndex(v)
+		return nil
+	case imagejobresult.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case imagejobresult.FieldObjectKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetObjectKey(v)
+		return nil
+	case imagejobresult.FieldMimeType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMimeType(v)
+		return nil
+	case imagejobresult.FieldByteSize:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetByteSize(v)
+		return nil
+	case imagejobresult.FieldWidth:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWidth(v)
+		return nil
+	case imagejobresult.FieldHeight:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHeight(v)
+		return nil
+	case imagejobresult.FieldSizeTier:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSizeTier(v)
+		return nil
+	case imagejobresult.FieldRevisedPrompt:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevisedPrompt(v)
+		return nil
+	case imagejobresult.FieldUpstreamOutputID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpstreamOutputID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJobResult field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ImageJobResultMutation) AddedFields() []string {
+	var fields []string
+	if m.addindex != nil {
+		fields = append(fields, imagejobresult.FieldIndex)
+	}
+	if m.addbyte_size != nil {
+		fields = append(fields, imagejobresult.FieldByteSize)
+	}
+	if m.addwidth != nil {
+		fields = append(fields, imagejobresult.FieldWidth)
+	}
+	if m.addheight != nil {
+		fields = append(fields, imagejobresult.FieldHeight)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ImageJobResultMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case imagejobresult.FieldIndex:
+		return m.AddedIndex()
+	case imagejobresult.FieldByteSize:
+		return m.AddedByteSize()
+	case imagejobresult.FieldWidth:
+		return m.AddedWidth()
+	case imagejobresult.FieldHeight:
+		return m.AddedHeight()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ImageJobResultMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case imagejobresult.FieldIndex:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddIndex(v)
+		return nil
+	case imagejobresult.FieldByteSize:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddByteSize(v)
+		return nil
+	case imagejobresult.FieldWidth:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWidth(v)
+		return nil
+	case imagejobresult.FieldHeight:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddHeight(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJobResult numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ImageJobResultMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(imagejobresult.FieldObjectKey) {
+		fields = append(fields, imagejobresult.FieldObjectKey)
+	}
+	if m.FieldCleared(imagejobresult.FieldMimeType) {
+		fields = append(fields, imagejobresult.FieldMimeType)
+	}
+	if m.FieldCleared(imagejobresult.FieldByteSize) {
+		fields = append(fields, imagejobresult.FieldByteSize)
+	}
+	if m.FieldCleared(imagejobresult.FieldWidth) {
+		fields = append(fields, imagejobresult.FieldWidth)
+	}
+	if m.FieldCleared(imagejobresult.FieldHeight) {
+		fields = append(fields, imagejobresult.FieldHeight)
+	}
+	if m.FieldCleared(imagejobresult.FieldSizeTier) {
+		fields = append(fields, imagejobresult.FieldSizeTier)
+	}
+	if m.FieldCleared(imagejobresult.FieldRevisedPrompt) {
+		fields = append(fields, imagejobresult.FieldRevisedPrompt)
+	}
+	if m.FieldCleared(imagejobresult.FieldUpstreamOutputID) {
+		fields = append(fields, imagejobresult.FieldUpstreamOutputID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ImageJobResultMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ImageJobResultMutation) ClearField(name string) error {
+	switch name {
+	case imagejobresult.FieldObjectKey:
+		m.ClearObjectKey()
+		return nil
+	case imagejobresult.FieldMimeType:
+		m.ClearMimeType()
+		return nil
+	case imagejobresult.FieldByteSize:
+		m.ClearByteSize()
+		return nil
+	case imagejobresult.FieldWidth:
+		m.ClearWidth()
+		return nil
+	case imagejobresult.FieldHeight:
+		m.ClearHeight()
+		return nil
+	case imagejobresult.FieldSizeTier:
+		m.ClearSizeTier()
+		return nil
+	case imagejobresult.FieldRevisedPrompt:
+		m.ClearRevisedPrompt()
+		return nil
+	case imagejobresult.FieldUpstreamOutputID:
+		m.ClearUpstreamOutputID()
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJobResult nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ImageJobResultMutation) ResetField(name string) error {
+	switch name {
+	case imagejobresult.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case imagejobresult.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case imagejobresult.FieldJobID:
+		m.ResetJobID()
+		return nil
+	case imagejobresult.FieldIndex:
+		m.ResetIndex()
+		return nil
+	case imagejobresult.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case imagejobresult.FieldObjectKey:
+		m.ResetObjectKey()
+		return nil
+	case imagejobresult.FieldMimeType:
+		m.ResetMimeType()
+		return nil
+	case imagejobresult.FieldByteSize:
+		m.ResetByteSize()
+		return nil
+	case imagejobresult.FieldWidth:
+		m.ResetWidth()
+		return nil
+	case imagejobresult.FieldHeight:
+		m.ResetHeight()
+		return nil
+	case imagejobresult.FieldSizeTier:
+		m.ResetSizeTier()
+		return nil
+	case imagejobresult.FieldRevisedPrompt:
+		m.ResetRevisedPrompt()
+		return nil
+	case imagejobresult.FieldUpstreamOutputID:
+		m.ResetUpstreamOutputID()
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJobResult field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ImageJobResultMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.job != nil {
+		edges = append(edges, imagejobresult.EdgeJob)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ImageJobResultMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case imagejobresult.EdgeJob:
+		if id := m.job; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ImageJobResultMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ImageJobResultMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ImageJobResultMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedjob {
+		edges = append(edges, imagejobresult.EdgeJob)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ImageJobResultMutation) EdgeCleared(name string) bool {
+	switch name {
+	case imagejobresult.EdgeJob:
+		return m.clearedjob
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ImageJobResultMutation) ClearEdge(name string) error {
+	switch name {
+	case imagejobresult.EdgeJob:
+		m.ClearJob()
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJobResult unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ImageJobResultMutation) ResetEdge(name string) error {
+	switch name {
+	case imagejobresult.EdgeJob:
+		m.ResetJob()
+		return nil
+	}
+	return fmt.Errorf("unknown ImageJobResult edge %s", name)
 }
 
 // PaymentAuditLogMutation represents an operation that mutates the PaymentAuditLog nodes in the graph.

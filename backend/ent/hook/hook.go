@@ -189,6 +189,42 @@ func (f IdentityAdoptionDecisionFunc) Mutate(ctx context.Context, m ent.Mutation
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityAdoptionDecisionMutation", m)
 }
 
+// The ImageJobFunc type is an adapter to allow the use of ordinary
+// function as ImageJob mutator.
+type ImageJobFunc func(context.Context, *ent.ImageJobMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ImageJobFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ImageJobMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ImageJobMutation", m)
+}
+
+// The ImageJobInputFunc type is an adapter to allow the use of ordinary
+// function as ImageJobInput mutator.
+type ImageJobInputFunc func(context.Context, *ent.ImageJobInputMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ImageJobInputFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ImageJobInputMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ImageJobInputMutation", m)
+}
+
+// The ImageJobResultFunc type is an adapter to allow the use of ordinary
+// function as ImageJobResult mutator.
+type ImageJobResultFunc func(context.Context, *ent.ImageJobResultMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ImageJobResultFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ImageJobResultMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ImageJobResultMutation", m)
+}
+
 // The PaymentAuditLogFunc type is an adapter to allow the use of ordinary
 // function as PaymentAuditLog mutator.
 type PaymentAuditLogFunc func(context.Context, *ent.PaymentAuditLogMutation) (ent.Value, error)

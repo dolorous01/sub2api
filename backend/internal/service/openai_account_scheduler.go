@@ -1283,18 +1283,64 @@ func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImages(
 	excludedIDs map[int64]struct{},
 	requiredCapability OpenAIImagesCapability,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
-	selection, decision, err := s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, "", requiredCapability, false, PlatformOpenAI)
-	if err == nil && selection != nil && selection.Account != nil {
-		return selection, decision, nil
-	}
-	// 如果要求 native 能力（如指定了模型）但没有可用的 APIKey 账号，回退到 basic（OAuth 账号）
-	if requiredCapability == OpenAIImagesCapabilityNative {
-		return s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, "", OpenAIImagesCapabilityBasic, false, PlatformOpenAI)
-	}
-	return selection, decision, err
+	return s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, "", requiredCapability, false, PlatformOpenAI)
 }
 
 func (s *OpenAIGatewayService) selectAccountWithScheduler(
+	ctx context.Context,
+	groupID *int64,
+	previousResponseID string,
+	sessionHash string,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	requiredTransport OpenAIUpstreamTransport,
+	requiredCapability OpenAIEndpointCapability,
+	requiredImageCapability OpenAIImagesCapability,
+	requireCompact bool,
+	platform string,
+) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
+	platform = normalizeOpenAICompatiblePlatform(platform)
+	groupIDs, err := s.resolveOpenAIAccountFallbackGroupIDs(ctx, groupID)
+	if err != nil {
+		return nil, OpenAIAccountScheduleDecision{}, err
+	}
+	if len(groupIDs) == 0 {
+		return s.selectAccountWithSchedulerForGroup(ctx, nil, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform)
+	}
+
+	var lastDecision OpenAIAccountScheduleDecision
+	var lastErr error
+	for i, candidateID := range groupIDs {
+		candidateGroupID := candidateID
+		selection, decision, err := s.selectAccountWithSchedulerForGroup(ctx, &candidateGroupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, requiredImageCapability, requireCompact, platform)
+		if err == nil {
+			if i > 0 && selection != nil && selection.Account != nil {
+				slog.Info("openai_account_fallback_group_selected",
+					"original_group_id", groupIDs[0],
+					"fallback_group_id", candidateGroupID,
+					"account_id", selection.Account.ID,
+					"model", requestedModel,
+				)
+			}
+			return selection, decision, nil
+		}
+		lastDecision = decision
+		lastErr = err
+		if i == len(groupIDs)-1 || !shouldTryOpenAIAccountFallback(err) {
+			return nil, decision, err
+		}
+		slog.Warn("openai_account_fallback_group_try_next",
+			"group_id", candidateGroupID,
+			"next_group_id", groupIDs[i+1],
+			"model", requestedModel,
+			"error", err,
+		)
+	}
+	return nil, lastDecision, lastErr
+}
+
+func (s *OpenAIGatewayService) selectAccountWithSchedulerForGroup(
 	ctx context.Context,
 	groupID *int64,
 	previousResponseID string,

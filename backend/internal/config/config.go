@@ -732,6 +732,8 @@ type GatewayConfig struct {
 	OpenAIHTTP2 GatewayOpenAIHTTP2Config `mapstructure:"openai_http2"`
 	// ImageConcurrency: 图片生成独立并发限制配置（默认关闭）
 	ImageConcurrency ImageConcurrencyConfig `mapstructure:"image_concurrency"`
+	// ImageJobs: 异步图片任务配置（默认关闭）
+	ImageJobs ImageJobsConfig `mapstructure:"image_jobs"`
 
 	// HTTP 上游连接池配置（性能优化：支持高并发场景调优）
 	// MaxIdleConns: 所有主机的最大空闲连接总数
@@ -1902,6 +1904,25 @@ func setDefaults() {
 	viper.SetDefault("gateway.image_concurrency.overflow_mode", ImageConcurrencyOverflowModeReject)
 	viper.SetDefault("gateway.image_concurrency.wait_timeout_seconds", 30)
 	viper.SetDefault("gateway.image_concurrency.max_waiting_requests", 100)
+	imageJobsDefaults := DefaultImageJobsConfig()
+	viper.SetDefault("gateway.image_jobs.enabled", imageJobsDefaults.Enabled)
+	viper.SetDefault("gateway.image_jobs.worker_concurrency", imageJobsDefaults.WorkerConcurrency)
+	viper.SetDefault("gateway.image_jobs.poll_interval_milliseconds", imageJobsDefaults.PollIntervalMilliseconds)
+	viper.SetDefault("gateway.image_jobs.heartbeat_interval_seconds", imageJobsDefaults.HeartbeatIntervalSeconds)
+	viper.SetDefault("gateway.image_jobs.task_timeout_seconds", imageJobsDefaults.TaskTimeoutSeconds)
+	viper.SetDefault("gateway.image_jobs.max_outputs_per_job", imageJobsDefaults.MaxOutputsPerJob)
+	viper.SetDefault("gateway.image_jobs.max_input_images", imageJobsDefaults.MaxInputImages)
+	viper.SetDefault("gateway.image_jobs.result_ttl_seconds", imageJobsDefaults.ResultTTLSeconds)
+	viper.SetDefault("gateway.image_jobs.max_reservation_usd", imageJobsDefaults.MaxReservationUSD)
+	viper.SetDefault("gateway.image_jobs.storage.driver", imageJobsDefaults.Storage.Driver)
+	viper.SetDefault("gateway.image_jobs.storage.endpoint", imageJobsDefaults.Storage.Endpoint)
+	viper.SetDefault("gateway.image_jobs.storage.region", imageJobsDefaults.Storage.Region)
+	viper.SetDefault("gateway.image_jobs.storage.bucket", imageJobsDefaults.Storage.Bucket)
+	viper.SetDefault("gateway.image_jobs.storage.prefix", imageJobsDefaults.Storage.Prefix)
+	viper.SetDefault("gateway.image_jobs.storage.access_key_id", imageJobsDefaults.Storage.AccessKeyID)
+	viper.SetDefault("gateway.image_jobs.storage.secret_access_key", imageJobsDefaults.Storage.SecretAccessKey)
+	viper.SetDefault("gateway.image_jobs.storage.force_path_style", imageJobsDefaults.Storage.ForcePathStyle)
+	viper.SetDefault("gateway.image_jobs.storage.local_directory", imageJobsDefaults.Storage.LocalDirectory)
 	viper.SetDefault("gateway.antigravity_fallback_cooldown_minutes", 1)
 	viper.SetDefault("gateway.antigravity_extra_retries", 10)
 	viper.SetDefault("gateway.max_body_size", int64(256*1024*1024))
@@ -2499,6 +2520,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Gateway.ImageConcurrency.MaxWaitingRequests < 0 {
 		return fmt.Errorf("gateway.image_concurrency.max_waiting_requests must be non-negative")
+	}
+	if err := c.Gateway.ImageJobs.Validate(); err != nil {
+		return err
 	}
 	if c.Gateway.MaxIdleConns <= 0 {
 		return fmt.Errorf("gateway.max_idle_conns must be positive")

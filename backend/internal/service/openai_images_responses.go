@@ -332,6 +332,9 @@ func buildOpenAIImagesResponsesRequest(parsed *OpenAIImagesRequest, toolModel st
 	if parsed == nil {
 		return nil, fmt.Errorf("parsed images request is required")
 	}
+	if strings.TrimSpace(parsed.InputFidelity) != "" {
+		return nil, fmt.Errorf("OAuth image bridge does not support input_fidelity")
+	}
 	prompt := strings.TrimSpace(parsed.Prompt)
 	if prompt == "" {
 		return nil, fmt.Errorf("prompt is required")
