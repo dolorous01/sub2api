@@ -2322,6 +2322,11 @@ export default {
         fallbackHint: 'Non-Claude Code requests will use this group. Leave empty to reject directly.',
         noFallback: 'No Fallback (Reject)'
       },
+      openaiFallback: {
+        title: 'OpenAI Auto Fallback Group',
+        hint: 'When no OpenAI account is available in the primary group, accounts are selected from this group. Billing still uses the current API key group multiplier.',
+        noFallback: 'No Fallback'
+      },
       openaiMessages: {
         title: 'OpenAI Messages Dispatch',
         allowDispatch: 'Allow /v1/messages dispatch',

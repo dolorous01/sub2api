@@ -339,6 +339,7 @@ var ErrNoAvailableCompactAccounts = errors.New("no available OpenAI accounts sup
 // OpenAIGatewayService handles OpenAI API gateway operations
 type OpenAIGatewayService struct {
 	accountRepo           AccountRepository
+	groupRepo             GroupRepository
 	usageLogRepo          UsageLogRepository
 	usageBillingRepo      UsageBillingRepository
 	userRepo              UserRepository
@@ -388,6 +389,7 @@ type OpenAIGatewayService struct {
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
 func NewOpenAIGatewayService(
 	accountRepo AccountRepository,
+	groupRepo GroupRepository,
 	usageLogRepo UsageLogRepository,
 	usageBillingRepo UsageBillingRepository,
 	userRepo UserRepository,
@@ -412,6 +414,7 @@ func NewOpenAIGatewayService(
 ) *OpenAIGatewayService {
 	svc := &OpenAIGatewayService{
 		accountRepo:         accountRepo,
+		groupRepo:           groupRepo,
 		usageLogRepo:        usageLogRepo,
 		usageBillingRepo:    usageBillingRepo,
 		userRepo:            userRepo,
@@ -1371,7 +1374,85 @@ func (s *OpenAIGatewayService) SelectAccountForModel(ctx context.Context, groupI
 // SelectAccountForModelWithExclusions selects an account supporting the requested model while excluding specified accounts.
 // SelectAccountForModelWithExclusions 选择支持指定模型的账号，同时排除指定的账号。
 func (s *OpenAIGatewayService) SelectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*Account, error) {
-	return s.selectAccountForModelWithExclusions(s.withOpenAIQuotaAutoPauseContext(ctx), groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, 0, "")
+	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
+	groupIDs, err := s.resolveOpenAIAccountFallbackGroupIDs(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if len(groupIDs) == 0 {
+		return s.selectAccountForModelWithExclusions(ctx, nil, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, 0, "")
+	}
+
+	var lastErr error
+	for i, candidateID := range groupIDs {
+		candidateGroupID := candidateID
+		account, err := s.selectAccountForModelWithExclusions(ctx, &candidateGroupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, 0, "")
+		if err == nil {
+			if i > 0 {
+				slog.Info("openai_account_fallback_group_selected",
+					"original_group_id", groupIDs[0],
+					"fallback_group_id", candidateGroupID,
+					"account_id", account.ID,
+					"model", requestedModel,
+				)
+			}
+			return account, nil
+		}
+		lastErr = err
+		if i == len(groupIDs)-1 || !shouldTryOpenAIAccountFallback(err) {
+			return nil, err
+		}
+		slog.Warn("openai_account_fallback_group_try_next",
+			"group_id", candidateGroupID,
+			"next_group_id", groupIDs[i+1],
+			"model", requestedModel,
+			"error", err,
+		)
+	}
+	return nil, lastErr
+}
+
+func (s *OpenAIGatewayService) resolveOpenAIAccountFallbackGroupIDs(ctx context.Context, groupID *int64) ([]int64, error) {
+	if groupID == nil {
+		return nil, nil
+	}
+	if s == nil || s.groupRepo == nil {
+		return []int64{*groupID}, nil
+	}
+
+	currentID := *groupID
+	visited := map[int64]struct{}{}
+	groupIDs := make([]int64, 0, 2)
+	for {
+		if _, seen := visited[currentID]; seen {
+			return nil, fmt.Errorf("fallback group cycle detected")
+		}
+		visited[currentID] = struct{}{}
+		groupIDs = append(groupIDs, currentID)
+
+		group, err := s.groupRepo.GetByIDLite(ctx, currentID)
+		if err != nil {
+			return nil, err
+		}
+		if group == nil || group.FallbackGroupID == nil || *group.FallbackGroupID <= 0 {
+			return groupIDs, nil
+		}
+		currentID = *group.FallbackGroupID
+	}
+}
+
+func shouldTryOpenAIAccountFallback(err error) bool {
+	if err == nil {
+		return false
+	}
+	if strings.Contains(err.Error(), "channel pricing restriction") {
+		return false
+	}
+	if errors.Is(err, ErrNoAvailableAccounts) || errors.Is(err, ErrNoAvailableCompactAccounts) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "no available OpenAI accounts")
 }
 
 // noAvailableOpenAISelectionError builds the standard "no account available" error
@@ -1996,7 +2077,42 @@ func (s *OpenAIGatewayService) isBetterAccount(candidate, current *Account) bool
 
 // SelectAccountWithLoadAwareness selects an account with load-awareness and wait plan.
 func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
-	return s.selectAccountWithLoadAwareness(s.withOpenAIQuotaAutoPauseContext(ctx), groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, "")
+	ctx = s.withOpenAIQuotaAutoPauseContext(ctx)
+	groupIDs, err := s.resolveOpenAIAccountFallbackGroupIDs(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if len(groupIDs) == 0 {
+		return s.selectAccountWithLoadAwareness(ctx, nil, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, "")
+	}
+
+	var lastErr error
+	for i, candidateID := range groupIDs {
+		candidateGroupID := candidateID
+		selection, err := s.selectAccountWithLoadAwareness(ctx, &candidateGroupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, "")
+		if err == nil {
+			if i > 0 && selection != nil && selection.Account != nil {
+				slog.Info("openai_account_fallback_group_selected",
+					"original_group_id", groupIDs[0],
+					"fallback_group_id", candidateGroupID,
+					"account_id", selection.Account.ID,
+					"model", requestedModel,
+				)
+			}
+			return selection, nil
+		}
+		lastErr = err
+		if i == len(groupIDs)-1 || !shouldTryOpenAIAccountFallback(err) {
+			return nil, err
+		}
+		slog.Warn("openai_account_fallback_group_try_next",
+			"group_id", candidateGroupID,
+			"next_group_id", groupIDs[i+1],
+			"model", requestedModel,
+			"error", err,
+		)
+	}
+	return nil, lastErr
 }
 
 func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability) (*AccountSelectionResult, error) {

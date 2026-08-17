@@ -2406,6 +2406,11 @@ export default {
         fallbackHint: '非 Claude Code 请求将使用此分组，留空则直接拒绝',
         noFallback: '不降级（直接拒绝）'
       },
+      openaiFallback: {
+        title: 'OpenAI 自动兜底分组',
+        hint: '主分组没有可用 OpenAI 账号时，将自动从此分组选账号；用户计费仍按当前 API Key 所属分组倍率计算。',
+        noFallback: '不兜底'
+      },
       openaiMessages: {
         title: 'OpenAI Messages 调度配置',
         allowDispatch: '允许 /v1/messages 调度',
