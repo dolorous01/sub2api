@@ -32,18 +32,27 @@ function sameOriginAsset(path: string): string {
   return url.href
 }
 
-function findEntry(manifest: Record<string, CanvasManifestEntry>): CanvasManifestEntry {
+export function resolveCanvasManifestEntry(manifest: Record<string, CanvasManifestEntry>): CanvasManifestEntry {
   const entry = Object.values(manifest).find((item) => item?.isEntry) ||
     Object.entries(manifest).find(([key]) => key.endsWith('entry.tsx') || key.endsWith('entry.js'))?.[1]
   if (!entry?.file) throw new Error('Canvas entry is missing from the build manifest')
-  return entry
+
+  const css = new Set(entry.css || [])
+  for (const item of Object.values(manifest)) {
+    if (item?.file?.toLowerCase().endsWith('.css')) css.add(item.file)
+  }
+  return { ...entry, css: [...css] }
 }
 
 async function loadManifestEntry(): Promise<CanvasManifestEntry> {
-  const response = await fetch(MANIFEST_PATH, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+  const response = await fetch(MANIFEST_PATH, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: { Accept: 'application/json' }
+  })
   if (!response.ok) throw new Error(`Canvas manifest request failed (${response.status})`)
   const manifest = await response.json() as Record<string, CanvasManifestEntry>
-  return findEntry(manifest)
+  return resolveCanvasManifestEntry(manifest)
 }
 
 function loadStyles(entry: CanvasManifestEntry, root: Document | ShadowRoot): void {
