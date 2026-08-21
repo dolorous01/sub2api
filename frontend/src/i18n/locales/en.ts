@@ -407,6 +407,7 @@ export default {
     users: 'Users',
     groups: 'Groups',
     channels: 'Channels',
+    imageCanvas: 'Image Canvas',
     availableChannels: 'Available Channels',
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
@@ -1431,6 +1432,10 @@ export default {
     jumpTo: 'Jump to',
     jumpPlaceholder: 'Page',
     jumpAction: 'Go'
+  },
+
+  imageCanvas: {
+    description: 'Generate, edit, and organize images on a local infinite canvas'
   },
 
   // Errors

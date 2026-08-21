@@ -121,6 +121,12 @@ apiClient.interceptors.response.use(
 
       // Validate `data` shape to avoid HTML error pages breaking our error handling.
       const apiData = (typeof data === 'object' && data !== null ? data : {}) as Record<string, any>
+      const nestedError = typeof apiData.error === 'object' && apiData.error !== null
+        ? apiData.error as Record<string, unknown>
+        : undefined
+      const nestedErrorMessage = typeof nestedError?.message === 'string'
+        ? nestedError.message
+        : undefined
 
       // Ops monitoring disabled: treat as feature-flagged 404, and proactively redirect away
       // from ops pages to avoid broken UI states.
@@ -290,7 +296,7 @@ apiClient.interceptors.response.use(
         code: apiData.code,
         reason: apiData.reason,
         error: apiData.error,
-        message: apiData.message || apiData.detail || error.message,
+        message: apiData.message || apiData.detail || nestedErrorMessage || error.message,
         metadata: apiData.metadata,
       })
     }

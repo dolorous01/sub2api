@@ -407,6 +407,7 @@ export default {
     users: '用户管理',
     groups: '分组管理',
     channels: '渠道管理',
+    imageCanvas: '图片画布',
     availableChannels: '可用渠道',
     subscriptions: '订阅管理',
     accounts: '账号管理',
@@ -1435,6 +1436,10 @@ export default {
     jumpTo: '跳转页',
     jumpPlaceholder: '页码',
     jumpAction: '跳转'
+  },
+
+  imageCanvas: {
+    description: '在本地无限画布中生成、编辑和整理图片'
   },
 
   // Errors

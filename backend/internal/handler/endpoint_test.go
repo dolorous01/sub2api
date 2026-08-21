@@ -38,6 +38,8 @@ func TestNormalizeInboundEndpoint(t *testing.T) {
 		{"/openai/v1/responses/compact", EndpointResponses},
 		{"/openai/v1/images/generations", EndpointImagesGenerations},
 		{"/openai/v1/images/edits", EndpointImagesEdits},
+		{"/api/v1/image-canvas/generations", EndpointImagesGenerations},
+		{"/api/v1/image-canvas/edits", EndpointImagesEdits},
 		{"/antigravity/v1beta/models/gemini:generateContent", EndpointGeminiModels},
 
 		// Gin route patterns with wildcards.

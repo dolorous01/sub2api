@@ -53,6 +53,8 @@ jobs:
 
   build-frontend:
     runs-on: ubuntu-latest
+    env:
+      VITE_CANVAS_SOURCE_URL: ${{ vars.CANVAS_SOURCE_URL || format('{0}/{1}/tree/{2}', github.server_url, github.repository, github.sha) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -60,7 +62,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 9
+          version: 10.28.2
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -75,6 +77,10 @@ jobs:
 
       - name: Build frontend
         run: pnpm run build
+        working-directory: frontend
+
+      - name: Verify Canvas release metadata
+        run: pnpm run check:canvas-release
         working-directory: frontend
 
       - name: Upload frontend artifact

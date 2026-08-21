@@ -429,9 +429,9 @@ func validateOpenAIImagesModel(model string) error {
 func normalizeOpenAIImagesEndpointPath(path string) string {
 	trimmed := strings.TrimSpace(path)
 	switch {
-	case strings.Contains(trimmed, "/images/generations"):
+	case strings.Contains(trimmed, "/images/generations"), strings.Contains(trimmed, "/image-canvas/generations"):
 		return openAIImagesGenerationsEndpoint
-	case strings.Contains(trimmed, "/images/edits"):
+	case strings.Contains(trimmed, "/images/edits"), strings.Contains(trimmed, "/image-canvas/edits"):
 		return openAIImagesEditsEndpoint
 	default:
 		return ""

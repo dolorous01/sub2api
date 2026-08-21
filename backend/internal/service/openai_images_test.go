@@ -58,6 +58,32 @@ func TestOpenAIGatewayServiceParseOpenAIImagesRequest_JSON(t *testing.T) {
 	require.False(t, parsed.Multipart)
 }
 
+func TestOpenAIGatewayServiceParseOpenAIImagesRequest_CanvasRoutes(t *testing.T) {
+	for _, test := range []struct {
+		path     string
+		endpoint string
+		isEdit   bool
+	}{
+		{path: "/api/v1/image-canvas/generations", endpoint: openAIImagesGenerationsEndpoint},
+		{path: "/api/v1/image-canvas/edits", endpoint: openAIImagesEditsEndpoint, isEdit: true},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			body := []byte(`{"model":"gpt-image-2","prompt":"draw","images":[{"image_url":"data:image/png;base64,aW1hZ2U="}]}`)
+			request := httptest.NewRequest(http.MethodPost, test.path, bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = request
+
+			parsed, err := (&OpenAIGatewayService{}).ParseOpenAIImagesRequest(c, body)
+
+			require.NoError(t, err)
+			require.Equal(t, test.endpoint, parsed.Endpoint)
+			require.Equal(t, test.isEdit, parsed.IsEdits())
+		})
+	}
+}
+
 func TestOpenAIGatewayServiceParseOpenAIImagesRequest_MultipartEdit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

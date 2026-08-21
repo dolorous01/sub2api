@@ -206,6 +206,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/images',
+    name: 'ImageCanvas',
+    component: () => import('@/views/user/ImageCanvasView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Image Canvas',
+      titleKey: 'nav.imageCanvas',
+      descriptionKey: 'imageCanvas.description'
+    }
+  },
+  {
     path: '/usage',
     name: 'Usage',
     component: () => import('@/views/user/UsageView.vue'),

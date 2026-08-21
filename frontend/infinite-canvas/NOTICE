@@ -1,0 +1,10 @@
+Infinite Canvas is derived from basketikun/infinite-canvas at commit
+ea0414e88cffa6b522cc13c0613b3c8085983a53 and is distributed under
+AGPL-3.0-only.
+
+Sub2API modifications dated 2026-08-21 replace direct provider configuration
+and browser-stored provider credentials with an authenticated Sub2API host
+bridge. Canvas projects and image assets remain local to the browser; image
+generation and editing use the existing synchronous Sub2API image gateway.
+Audio, video, local-agent, and third-party plugin runtimes from the upstream
+snapshot are not enabled in the mounted application.

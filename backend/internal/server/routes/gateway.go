@@ -42,22 +42,7 @@ func RegisterGatewayRoutes(
 	isOpenAIGatewayPlatform := func(c *gin.Context) bool {
 		return getGroupPlatform(c) == service.PlatformOpenAI
 	}
-	imagesHandler := func(c *gin.Context) {
-		switch getGroupPlatform(c) {
-		case service.PlatformOpenAI:
-			h.OpenAIGateway.Images(c)
-		case service.PlatformGrok:
-			h.OpenAIGateway.GrokImages(c)
-		default:
-			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": gin.H{
-					"type":    "not_found_error",
-					"message": "Images API is not supported for this platform",
-				},
-			})
-		}
-	}
+	imagesHandler := gatewayImagesHandler(h)
 	imageSequenceHandler := func(c *gin.Context) {
 		if !isOpenAIGatewayPlatform(c) {
 			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
@@ -285,6 +270,27 @@ func RegisterGatewayRoutes(
 		antigravityV1Beta.POST("/models/*modelAction", h.Gateway.GeminiV1BetaModels)
 	}
 
+}
+
+// gatewayImagesHandler keeps every browser and API entrypoint on the same
+// platform dispatch path.
+func gatewayImagesHandler(h *handler.Handlers) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		switch getGroupPlatform(c) {
+		case service.PlatformOpenAI:
+			h.OpenAIGateway.Images(c)
+		case service.PlatformGrok:
+			h.OpenAIGateway.GrokImages(c)
+		default:
+			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": gin.H{
+					"type":    "not_found_error",
+					"message": "Images API is not supported for this platform",
+				},
+			})
+		}
+	}
 }
 
 // getGroupPlatform extracts the group platform from the API Key stored in context.

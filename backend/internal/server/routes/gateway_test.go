@@ -47,6 +47,12 @@ func newGatewayRoutesTestRouter(platform ...string) *gin.Engine {
 	return router
 }
 
+func TestImageCanvasBodyLimit(t *testing.T) {
+	require.Equal(t, int64(21<<20), imageCanvasBodyLimit(256<<20))
+	require.Equal(t, int64(8<<20), imageCanvasBodyLimit(8<<20))
+	require.Equal(t, int64(21<<20), imageCanvasBodyLimit(0))
+}
+
 func TestGatewayRoutesOpenAIResponsesCompactPathIsRegistered(t *testing.T) {
 	router := newGatewayRoutesTestRouter()
 

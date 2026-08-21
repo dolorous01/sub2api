@@ -18,13 +18,17 @@ ARG GOSUMDB=sum.golang.google.cn
 # -----------------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS frontend-builder
 
+ARG VITE_CANVAS_SOURCE_URL=https://github.com/Wei-Shaw/sub2api
+ENV VITE_CANVAS_SOURCE_URL=${VITE_CANVAS_SOURCE_URL}
+
 WORKDIR /app/frontend
 
-# Install pnpm (pinned to v9 to match CI and keep builds reproducible)
-RUN corepack enable && corepack prepare pnpm@9 --activate
+# Install the workspace package manager version used by CI.
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 
 # Install dependencies first (better caching)
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+COPY frontend/infinite-canvas/package.json ./infinite-canvas/package.json
 RUN pnpm install --frozen-lockfile
 
 # Copy frontend source and build.

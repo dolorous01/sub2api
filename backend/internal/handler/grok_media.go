@@ -20,7 +20,7 @@ import (
 // GrokImages handles xAI image generation/editing through Grok groups.
 func (h *OpenAIGatewayHandler) GrokImages(c *gin.Context) {
 	endpoint := service.GrokMediaEndpointImagesGenerations
-	if strings.Contains(c.Request.URL.Path, "/images/edits") {
+	if GetInboundEndpoint(c) == EndpointImagesEdits {
 		endpoint = service.GrokMediaEndpointImagesEdits
 	}
 	h.handleGrokMedia(c, endpoint, "")

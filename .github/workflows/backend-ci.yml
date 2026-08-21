@@ -30,12 +30,14 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    env:
+      VITE_CANVAS_SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}/tree/${{ github.sha }}
     steps:
       - uses: actions/checkout@v6
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 9
+          version: 10.28.2
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -47,6 +49,11 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Frontend typecheck and critical vitest
         run: make test-frontend
+      - name: Build frontend and verify Canvas release metadata
+        working-directory: frontend
+        run: |
+          pnpm run build
+          pnpm run check:canvas-release
 
   golangci-lint:
     runs-on: ubuntu-latest

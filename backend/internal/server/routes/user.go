@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -8,12 +9,25 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const imageCanvasMaxBodySize int64 = 21 << 20
+
+func imageCanvasBodyLimit(configured int64) int64 {
+	if configured > 0 && configured < imageCanvasMaxBodySize {
+		return configured
+	}
+	return imageCanvasMaxBodySize
+}
+
 // RegisterUserRoutes 注册用户相关路由（需要认证）
 func RegisterUserRoutes(
 	v1 *gin.RouterGroup,
 	h *handler.Handlers,
 	jwtAuth middleware.JWTAuthMiddleware,
+	apiKeyAuth middleware.APIKeyAuthMiddleware,
+	apiKeyService *service.APIKeyService,
+	opsService *service.OpsService,
 	settingService *service.SettingService,
+	cfg *config.Config,
 ) {
 	authenticated := v1.Group("")
 	authenticated.Use(gin.HandlerFunc(jwtAuth))
@@ -63,6 +77,24 @@ func RegisterUserRoutes(
 			keys.POST("", h.APIKey.Create)
 			keys.PUT("/:id", h.APIKey.Update)
 			keys.DELETE("/:id", h.APIKey.Delete)
+		}
+
+		// Infinite Canvas uses the browser's JWT session and selects one of the
+		// current user's API keys by ID. The existing image gateway remains the
+		// single implementation for scheduling, moderation, billing, and usage.
+		imageCanvas := authenticated.Group("/image-canvas")
+		imageCanvas.Use(
+			middleware.RequestBodyLimit(imageCanvasBodyLimit(cfg.Gateway.MaxBodySize)),
+			middleware.ClientRequestID(),
+			handler.OpsErrorLoggerMiddleware(opsService),
+			handler.InboundEndpointMiddleware(),
+			middleware.SelectOwnedAPIKey(apiKeyService, apiKeyAuth),
+			middleware.RequireGroupAssignment(settingService, middleware.AnthropicErrorWriter),
+		)
+		{
+			imagesHandler := gatewayImagesHandler(h)
+			imageCanvas.POST("/generations", imagesHandler)
+			imageCanvas.POST("/edits", imagesHandler)
 		}
 
 		// 用户可用分组（非管理员接口）

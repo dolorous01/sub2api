@@ -203,6 +203,31 @@ describe('API Client', () => {
 
       window.removeEventListener('admin-compliance-required', listener)
     })
+
+    it('保留 OpenAI 风格错误中的具体消息', async () => {
+      const adapter = vi.fn().mockRejectedValue({
+        response: {
+          status: 400,
+          data: {
+            error: {
+              type: 'invalid_request_error',
+              message: 'The selected model does not support image edits',
+            },
+          },
+        },
+        config: { url: '/image-canvas/edits', headers: {} },
+        message: 'Request failed with status code 400',
+        code: 'ERR_BAD_REQUEST',
+      })
+      apiClient.defaults.adapter = adapter
+
+      await expect(apiClient.post('/image-canvas/edits')).rejects.toEqual(
+        expect.objectContaining({
+          status: 400,
+          message: 'The selected model does not support image edits',
+        })
+      )
+    })
   })
 
   // --- 401 Token 刷新 ---

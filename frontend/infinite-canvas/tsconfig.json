@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/upstream/*"],
+      "@sub2api/*": ["src/*"]
+    },
+    "types": ["vite/client", "vitest/globals"]
+  },
+  "include": [
+    "src/entry.tsx",
+    "src/vite-env.d.ts",
+    "src/canvas-app.tsx",
+    "src/host-context.tsx",
+    "src/api/**/*.ts",
+    "src/stores/**/*.ts",
+    "src/components/**/*.tsx",
+    "src/i18n.tsx",
+    "src/upstream/components/canvas/infinite-canvas.tsx",
+    "src/upstream/lib/canvas-theme.ts",
+    "src/upstream/stores/use-theme-store.ts",
+    "src/upstream/types/canvas.ts"
+  ]
+}
