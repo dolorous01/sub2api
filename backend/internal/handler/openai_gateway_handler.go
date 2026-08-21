@@ -43,6 +43,10 @@ type OpenAIGatewayHandler struct {
 	cfg                      *config.Config
 }
 
+type imageSlotAcquirer interface {
+	AcquireImageSlot(ctx context.Context) (func(), error)
+}
+
 func resolveOpenAIMessagesDispatchMappedModel(apiKey *service.APIKey, requestedModel string) string {
 	if apiKey == nil || apiKey.Group == nil {
 		return ""
@@ -1817,8 +1821,8 @@ func (h *OpenAIGatewayHandler) acquireImageGenerationSlot(c *gin.Context, stream
 	if h == nil || h.cfg == nil {
 		return nil, true
 	}
-	if h.imageExecutor != nil {
-		release, err := h.imageExecutor.AcquireImageSlot(c.Request.Context())
+	if slotAcquirer, ok := h.imageExecutor.(imageSlotAcquirer); ok {
+		release, err := slotAcquirer.AcquireImageSlot(c.Request.Context())
 		if err == nil {
 			return release, true
 		}

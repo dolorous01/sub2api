@@ -99,9 +99,10 @@ type OpenAIImageExecutor struct {
 }
 
 const (
-	imageExecutorUserWaitTimeout = 30 * time.Second
-	imageExecutorWaitBackoff     = 100 * time.Millisecond
-	imageExecutorMaxBackoff      = 2 * time.Second
+	imageExecutorUserWaitTimeout       = 30 * time.Second
+	imageExecutorWaitBackoff           = 100 * time.Millisecond
+	imageExecutorMaxBackoff            = 2 * time.Second
+	imageExecutorSameAccountRetryDelay = 500 * time.Millisecond
 )
 
 type imageExecutorAccountSelector func(
@@ -271,7 +272,7 @@ func (e *OpenAIImageExecutor) Execute(ctx context.Context, input ImageExecutionI
 					select {
 					case <-ctx.Done():
 						return execution, imageExecutionContextError(ctx, forwardErr)
-					case <-time.After(sameAccountRetryDelay):
+					case <-time.After(imageExecutorSameAccountRetryDelay):
 					}
 					continue
 				}

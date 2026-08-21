@@ -323,7 +323,7 @@ func (w *ImageJobWorker) executeBatchClaim(
 		Job: job, Execution: execution, APIKey: apiKey, User: apiKey.User,
 		Subscription: subscription, PersistedResultCount: completed,
 		InboundEndpoint: job.Endpoint, UpstreamEndpoint: job.Endpoint,
-		RequestPayloadHash: job.RequestDigest, QuotaPlatform: PlatformOpenAI,
+		QuotaPlatform:      PlatformOpenAI,
 		ChannelUsageFields: mapping.ToUsageFields(job.RequestedModel, mappedModel),
 		APIKeyService:      imageJobAPIKeyQuotaUpdater(w.apiKeys),
 	})
@@ -400,7 +400,7 @@ func (w *ImageJobWorker) executeSequenceClaim(
 				Job: job, FrameIndex: frameIndex, Execution: execution,
 				APIKey: apiKey, User: apiKey.User, Subscription: subscription,
 				PersistedResultCount: 1, InboundEndpoint: job.Endpoint,
-				UpstreamEndpoint: job.Endpoint, RequestPayloadHash: job.RequestDigest,
+				UpstreamEndpoint:   job.Endpoint,
 				QuotaPlatform:      PlatformOpenAI,
 				ChannelUsageFields: mapping.ToUsageFields(job.RequestedModel, mappedModel),
 				APIKeyService:      imageJobAPIKeyQuotaUpdater(w.apiKeys),
