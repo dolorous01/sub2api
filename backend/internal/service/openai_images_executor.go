@@ -214,10 +214,9 @@ func (e *OpenAIImageExecutor) Execute(ctx context.Context, input ImageExecutionI
 		// selection. Synthetic pool-mode hashes are generated after selection,
 		// so bind those after the executor has acquired the slot as well.
 		if generatedSession || (!selection.Acquired && bindSession) {
-			if err := e.gateway.BindStickySession(ctx, input.APIKey.GroupID, input.SessionHash, account.ID); err != nil {
-				// A sticky-session write is an optimization. Keep the request
-				// running when Redis is temporarily unavailable.
-			}
+			// A sticky-session write is an optimization. Keep the request
+			// running when Redis is temporarily unavailable.
+			_ = e.gateway.BindStickySession(ctx, input.APIKey.GroupID, input.SessionHash, account.ID)
 		}
 		routingLatencyMs += time.Since(routingStart).Milliseconds()
 		forwardStart := time.Now()
@@ -386,7 +385,7 @@ func (e *OpenAIImageExecutor) forwardAPIKeyAccount(ctx context.Context, input Im
 	if resp == nil {
 		return nil, fmt.Errorf("upstream returned an empty response")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, openAIUpstreamErrorBodyReadLimitForConfig(e.cfg)))
 		if e.gateway.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, sanitizeUpstreamErrorMessage(extractUpstreamErrorMessage(body)), body) {
@@ -444,7 +443,7 @@ func (e *OpenAIImageExecutor) forwardOAuthAccount(ctx context.Context, input Ima
 	if resp == nil {
 		return nil, fmt.Errorf("upstream returned an empty response")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		responseBody, _ := io.ReadAll(io.LimitReader(resp.Body, openAIUpstreamErrorBodyReadLimitForConfig(e.cfg)))
 		if e.gateway.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, sanitizeUpstreamErrorMessage(extractUpstreamErrorMessage(responseBody)), responseBody) {

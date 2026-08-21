@@ -49,7 +49,7 @@ func (r *imageJobRepository) CreateReserved(ctx context.Context, create *service
 	if err != nil {
 		return false, nil, fmt.Errorf("begin image job create: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if create.IdempotencyKeyHash != nil {
 		job, err := scanImageJob(tx.QueryRowContext(ctx, `
 			SELECT `+imageJobColumns+`
@@ -309,7 +309,7 @@ func (r *imageJobRepository) ClaimNext(ctx context.Context, workerID, attemptID 
 	if err != nil {
 		return nil, fmt.Errorf("begin image job claim: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	job, err := scanImageJob(tx.QueryRowContext(ctx, `
 		WITH next AS (
@@ -368,7 +368,7 @@ func (r *imageJobRepository) UpsertResult(ctx context.Context, jobID int64, atte
 	if err != nil {
 		return false, fmt.Errorf("begin image job result upsert: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	var currentStatus string
 	if err := tx.QueryRowContext(ctx, `
@@ -455,7 +455,7 @@ func (r *imageJobRepository) transitionImageJobReservation(ctx context.Context, 
 	if err != nil {
 		return fmt.Errorf("begin image job reservation transition: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var reservationStatus, settlementStatus string
 	if err := tx.QueryRowContext(ctx, `
 		SELECT reservation_status, settlement_status
@@ -560,7 +560,7 @@ func (r *imageJobRepository) cancel(ctx context.Context, publicID string, apiKey
 	if err != nil {
 		return nil, fmt.Errorf("begin image job cancel: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	query := `SELECT ` + imageJobColumns + ` FROM image_jobs WHERE public_id = $1`
 	args := []any{publicID}
 	if apiKeyID != nil {
@@ -637,7 +637,7 @@ func (r *imageJobRepository) RecoverStale(ctx context.Context, cutoff time.Time)
 	if err != nil {
 		return 0, 0, fmt.Errorf("begin stale image job recovery: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	requeueResult, err := tx.ExecContext(ctx, `
 		UPDATE image_jobs
 		SET status = 'queued', worker_id = NULL, attempt_id = NULL,
@@ -694,7 +694,7 @@ func (r *imageJobRepository) ListExpired(ctx context.Context, now time.Time, lim
 	if err != nil {
 		return nil, fmt.Errorf("list expired image jobs: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var jobs []*service.ImageJob
 	for rows.Next() {
 		job, err := scanImageJob(rows)
@@ -725,7 +725,7 @@ func (r *imageJobRepository) MarkExpired(ctx context.Context, jobID int64, fromS
 	if err != nil {
 		return fmt.Errorf("begin image job expiration: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	result, err := tx.ExecContext(ctx, `
 		UPDATE image_jobs
 		SET status = 'expired',
@@ -822,13 +822,13 @@ func loadImageJobRelations(ctx context.Context, query imageJobQueryer, job *serv
 	for inputRows.Next() {
 		var input service.ImageJobInput
 		if err := inputRows.Scan(&input.ID, &input.JobID, &input.Index, &input.Kind, &input.ObjectKey, &input.MIMEType, &input.ByteSize, &input.SHA256, &input.CreatedAt); err != nil {
-			inputRows.Close()
+			_ = inputRows.Close()
 			return fmt.Errorf("scan image job input: %w", err)
 		}
 		job.Inputs = append(job.Inputs, input)
 	}
 	if err := inputRows.Err(); err != nil {
-		inputRows.Close()
+		_ = inputRows.Close()
 		return fmt.Errorf("iterate image job inputs: %w", err)
 	}
 	if err := inputRows.Close(); err != nil {
@@ -843,7 +843,7 @@ func loadImageJobRelations(ctx context.Context, query imageJobQueryer, job *serv
 	if err != nil {
 		return fmt.Errorf("load image job results: %w", err)
 	}
-	defer resultRows.Close()
+	defer func() { _ = resultRows.Close() }()
 	for resultRows.Next() {
 		var result service.ImageJobResult
 		var objectKey, mimeType, sizeTier, revisedPrompt, upstreamOutputID sql.NullString

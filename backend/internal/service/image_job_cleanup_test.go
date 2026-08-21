@@ -52,10 +52,10 @@ func (r *cleanupMemoryImageJobRepository) ListExpired(context.Context, time.Time
 
 func (r *cleanupMemoryImageJobRepository) MarkExpired(_ context.Context, jobID int64, fromStatus ImageJobStatus, _ time.Time) error {
 	r.markCalls++
-	if r.workerMemoryImageJobRepository.job.ID != jobID || r.workerMemoryImageJobRepository.job.Status != fromStatus {
+	if r.job.ID != jobID || r.job.Status != fromStatus {
 		return ErrImageJobConflict
 	}
-	r.workerMemoryImageJobRepository.job.Status = ImageJobStatusExpired
+	r.job.Status = ImageJobStatusExpired
 	return nil
 }
 

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -268,8 +267,7 @@ func (s *HTTPImageResultSink) Complete(_ context.Context, summary ImageExecution
 		// event: existing OpenAI image clients terminate on completed events.
 		return nil
 	}
-	response := map[string]any{"created": created, "data": make([]map[string]any, 0, len(s.results))}
-	items := response["data"].([]map[string]any)
+	items := make([]map[string]any, 0, len(s.results))
 	for _, image := range s.results {
 		payload, err := s.imagePayload(image)
 		if err != nil {
@@ -281,7 +279,7 @@ func (s *HTTPImageResultSink) Complete(_ context.Context, summary ImageExecution
 		}
 		items = append(items, item)
 	}
-	response["data"] = items
+	response := map[string]any{"created": created, "data": items}
 	if summary.ForwardResult != nil && summary.ForwardResult.Model != "" {
 		response["model"] = summary.ForwardResult.Model
 	}
@@ -334,12 +332,6 @@ func (s *HTTPImageResultSink) imagePayload(image ImageArtifact) ([]byte, error) 
 	return json.Marshal(payload)
 }
 
-func (s *HTTPImageResultSink) writeSSE(event string, payload []byte) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.writeSSELocked(event, payload)
-}
-
 func hasImageUsage(usage OpenAIUsage) bool {
 	return usage.InputTokens != 0 || usage.ImageInputTokens != 0 || usage.OutputTokens != 0 ||
 		usage.CacheCreationInputTokens != 0 || usage.CacheReadInputTokens != 0 || usage.ImageOutputTokens != 0
@@ -384,11 +376,4 @@ func imageArtifactContentType(image ImageArtifact) string {
 		return http.DetectContentType(image.Data)
 	}
 	return "application/octet-stream"
-}
-
-func imageArtifactSize(image ImageArtifact) string {
-	if image.SizeTier != "" {
-		return image.SizeTier
-	}
-	return strconv.Itoa(len(image.Data))
 }

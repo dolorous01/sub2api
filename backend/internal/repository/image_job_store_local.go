@@ -73,14 +73,22 @@ func (s *localImageJobObjectStore) Put(ctx context.Context, key string, data []b
 	if err != nil {
 		return fmt.Errorf("stage image job object: %w", err)
 	}
-	defer os.Remove(dataTemp)
+	defer func() {
+		if dataTemp != "" {
+			_ = os.Remove(dataTemp)
+		}
+	}()
 
 	metadataPath := path + ".meta.json"
 	metadataTemp, err := stageAdjacentFile(metadataPath, metadata)
 	if err != nil {
 		return fmt.Errorf("stage image job object metadata: %w", err)
 	}
-	defer os.Remove(metadataTemp)
+	defer func() {
+		if metadataTemp != "" {
+			_ = os.Remove(metadataTemp)
+		}
+	}()
 
 	previousMetadata, metadataExisted, err := readPreviousMetadata(metadataPath)
 	if err != nil {
@@ -158,10 +166,13 @@ func (s *localImageJobObjectStore) Health(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create image job object store health check: %w", err)
 	}
-	defer os.Remove(tempPath)
+	defer func() { _ = os.Remove(tempPath) }()
 	if err := file.Sync(); err != nil {
-		file.Close()
-		return fmt.Errorf("sync image job object store health check: %w", err)
+		syncErr := fmt.Errorf("sync image job object store health check: %w", err)
+		if closeErr := file.Close(); closeErr != nil {
+			return errors.Join(syncErr, fmt.Errorf("close image job object store health check: %w", closeErr))
+		}
+		return syncErr
 	}
 	if err := file.Close(); err != nil {
 		return fmt.Errorf("close image job object store health check: %w", err)
@@ -242,7 +253,7 @@ func stageAdjacentFile(destination string, data []byte) (string, error) {
 	cleanup := true
 	defer func() {
 		if cleanup {
-			os.Remove(tempPath)
+			_ = os.Remove(tempPath)
 		}
 	}()
 	if written, err := file.Write(data); err != nil {
@@ -283,7 +294,7 @@ func restoreMetadata(path string, previous []byte, existed bool) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tempPath)
+	defer func() { _ = os.Remove(tempPath) }()
 	return os.Rename(tempPath, path)
 }
 
@@ -318,7 +329,7 @@ func readRegularFile(path string, limit int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	data, err := io.ReadAll(io.LimitReader(file, limit+1))
 	if err != nil {
 		return nil, err
@@ -334,6 +345,7 @@ func syncDirectory(directory string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-	return file.Sync()
+	syncErr := file.Sync()
+	closeErr := file.Close()
+	return errors.Join(syncErr, closeErr)
 }
