@@ -50,7 +50,7 @@ func TestJobImageResultSinkIgnoresDuplicateFinalProgress(t *testing.T) {
 }
 
 func TestJobImageResultSinkDoesNotDeleteObjectWhenMetadataWriteFails(t *testing.T) {
-	worker, deps := newImageJobWorkerFixture(t, 1)
+	_, deps := newImageJobWorkerFixture(t, 1)
 	deps.repo.failUpsert = true
 	sink := NewJobImageResultSink(deps.repo.job, "attempt", deps.repo, deps.store, nil)
 	artifact := ImageArtifact{Index: 0, Data: []byte("png"), MIMEType: "image/png"}
