@@ -122,6 +122,8 @@ CLAUDE.md
 scripts
 !backend/scripts/
 !backend/scripts/resolve-version.sh
+!frontend/infinite-canvas/scripts/
+!frontend/infinite-canvas/scripts/*.mjs
 .code-review-state
 #openspec/
 code-reviews/

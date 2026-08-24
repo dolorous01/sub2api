@@ -1277,8 +1277,8 @@ func normalizeOpenAIImageBase64(raw string) string {
 			raw = raw[idx+1:]
 		}
 	}
-	raw = strings.TrimSpace(raw)
-	raw = strings.TrimRight(raw, "=") + strings.Repeat("=", (4-len(raw)%4)%4)
+	raw = strings.TrimRight(strings.TrimSpace(raw), "=")
+	raw += strings.Repeat("=", (4-len(raw)%4)%4)
 	if raw == "" {
 		return ""
 	}

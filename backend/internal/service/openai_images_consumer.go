@@ -419,8 +419,8 @@ func resolveConsumerImageBytes(ctx context.Context, pointer openAIImagePointerIn
 }
 
 func normalizeBase64ForDecode(raw string) string {
-	raw = strings.TrimSpace(raw)
-	raw = strings.TrimRight(raw, "=") + strings.Repeat("=", (4-len(raw)%4)%4)
+	raw = strings.TrimRight(strings.TrimSpace(raw), "=")
+	raw += strings.Repeat("=", (4-len(raw)%4)%4)
 	return raw
 }
 

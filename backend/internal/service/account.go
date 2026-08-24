@@ -1403,7 +1403,7 @@ func (a *Account) SupportsOpenAIImageCapability(capability OpenAIImagesCapabilit
 	}
 	switch capability {
 	case OpenAIImagesCapabilityBasic:
-		return a.Type == AccountTypeOAuth || a.Type == AccountTypeAPIKey
+		return a.Platform == PlatformOpenAI && (a.Type == AccountTypeOAuth || a.Type == AccountTypeAPIKey)
 	case OpenAIImagesCapabilityNative:
 		return a.Type == AccountTypeAPIKey || (a.Platform == PlatformGrok && a.Type == AccountTypeOAuth)
 	default:
