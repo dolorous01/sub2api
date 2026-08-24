@@ -15,6 +15,10 @@ import (
 )
 
 func ParseOpenAIImagesRequestBody(endpoint, contentType string, body []byte) (*OpenAIImagesRequest, error) {
+	return parseOpenAIImagesRequestBody(endpoint, contentType, body, true)
+}
+
+func parseOpenAIImagesRequestBody(endpoint, contentType string, body []byte, validateModel bool) (*OpenAIImagesRequest, error) {
 	endpoint = normalizeOpenAIImagesEndpointPath(endpoint)
 	if endpoint == "" {
 		return nil, fmt.Errorf("unsupported images endpoint")
@@ -51,9 +55,12 @@ func ParseOpenAIImagesRequestBody(endpoint, contentType string, body []byte) (*O
 	}
 
 	applyOpenAIImagesDefaults(req)
-	if err := validateOpenAIImagesModel(req.Model); err != nil {
-		return nil, err
+	if validateModel {
+		if err := validateOpenAIImagesModel(req.Model); err != nil {
+			return nil, err
+		}
 	}
+	req.Provider = imageProviderForModel(req.Model)
 	req.SizeTier = normalizeOpenAIImageSizeTier(req.Size)
 	req.RequiredCapability = classifyOpenAIImagesCapability(req)
 	return req, nil
@@ -70,11 +77,12 @@ func BuildOpenAIImagesRequest(
 	if req.N <= 0 {
 		return nil, "", nil, fmt.Errorf("image job request n must be greater than 0")
 	}
+	req.Provider = normalizeImageProvider(req.Provider, req.Model)
 	endpoint := normalizeOpenAIImagesEndpointPath(req.Endpoint)
 	if endpoint == "" {
 		return nil, "", nil, fmt.Errorf("unsupported images endpoint")
 	}
-	if endpoint == openAIImagesEditsEndpoint && strings.TrimSpace(req.InputFidelity) == "" {
+	if req.Provider == ImageProviderOpenAI && endpoint == openAIImagesEditsEndpoint && strings.TrimSpace(req.InputFidelity) == "" {
 		req.InputFidelity = "high"
 	}
 	if endpoint != openAIImagesEditsEndpoint && (len(req.Inputs) > 0 || req.Mask != nil || len(req.InputURLs) > 0 || req.MaskURL != "") {
@@ -89,10 +97,11 @@ func BuildOpenAIImagesRequest(
 		if err != nil {
 			return nil, "", nil, err
 		}
-		parsed, err := ParseOpenAIImagesRequestBody(endpoint, contentType, body)
+		parsed, err := parseOpenAIImagesRequestBody(endpoint, contentType, body, false)
 		if err != nil {
 			return nil, "", nil, fmt.Errorf("parse rebuilt image request: %w", err)
 		}
+		applyImageJobProviderFields(parsed, req)
 		return body, contentType, parsed, nil
 	}
 
@@ -101,11 +110,23 @@ func BuildOpenAIImagesRequest(
 		return nil, "", nil, err
 	}
 	const contentType = "application/json"
-	parsed, err := ParseOpenAIImagesRequestBody(endpoint, contentType, body)
+	parsed, err := parseOpenAIImagesRequestBody(endpoint, contentType, body, false)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("parse rebuilt image request: %w", err)
 	}
+	applyImageJobProviderFields(parsed, req)
 	return body, contentType, parsed, nil
+}
+
+func applyImageJobProviderFields(parsed *OpenAIImagesRequest, req ImageJobRequest) {
+	if parsed == nil {
+		return
+	}
+	parsed.Provider = normalizeImageProvider(req.Provider, req.Model)
+	if parsed.Provider == ImageProviderGrok {
+		parsed.Stream = false
+		parsed.SizeTier = normalizeOpenAIImageSizeTier(parsed.Resolution)
+	}
 }
 
 func buildImageJobMultipartRequest(ctx context.Context, store ImageJobObjectStore, req ImageJobRequest) ([]byte, string, error) {
@@ -160,6 +181,8 @@ func writeImageJobMultipartFields(writer *multipart.Writer, req ImageJobRequest)
 		{name: "prompt", value: req.Prompt},
 		{name: "n", value: strconv.Itoa(req.N)},
 		{name: "size", value: req.Size},
+		{name: "aspect_ratio", value: req.AspectRatio},
+		{name: "resolution", value: req.Resolution},
 		{name: "response_format", value: req.ResponseFormat},
 		{name: "quality", value: req.Quality},
 		{name: "background", value: req.Background},
@@ -167,7 +190,12 @@ func writeImageJobMultipartFields(writer *multipart.Writer, req ImageJobRequest)
 		{name: "moderation", value: req.Moderation},
 		{name: "input_fidelity", value: req.InputFidelity},
 		{name: "style", value: req.Style},
-		{name: "stream", value: "true"},
+	}
+	if normalizeImageProvider(req.Provider, req.Model) == ImageProviderOpenAI {
+		fields = append(fields, struct {
+			name  string
+			value string
+		}{name: "stream", value: "true"})
 	}
 	if req.OutputCompression != nil {
 		fields = append(fields, struct {
@@ -246,13 +274,17 @@ func buildImageJobJSONRequest(req ImageJobRequest) ([]byte, error) {
 	payload["model"] = req.Model
 	payload["prompt"] = req.Prompt
 	payload["n"] = req.N
-	payload["stream"] = true
+	if normalizeImageProvider(req.Provider, req.Model) == ImageProviderOpenAI {
+		payload["stream"] = true
+	}
 	addString := func(name, value string) {
 		if value != "" {
 			payload[name] = value
 		}
 	}
 	addString("size", req.Size)
+	addString("aspect_ratio", req.AspectRatio)
+	addString("resolution", req.Resolution)
 	addString("response_format", req.ResponseFormat)
 	addString("quality", req.Quality)
 	addString("background", req.Background)

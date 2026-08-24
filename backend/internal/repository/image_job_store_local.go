@@ -337,3 +337,104 @@ func syncDirectory(directory string) error {
 	defer file.Close()
 	return file.Sync()
 }
+
+func (s *localImageJobObjectStore) PutReader(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if reader == nil || size <= 0 || size > maxCanvasMediaObjectBytes {
+		return fmt.Errorf("canvas media object size is invalid")
+	}
+	path, err := s.objectPath(key, true)
+	if err != nil {
+		return err
+	}
+	dataTemp, file, err := newAdjacentTemp(filepath.Dir(path), filepath.Base(path))
+	if err != nil {
+		return fmt.Errorf("create canvas media staging file: %w", err)
+	}
+	defer os.Remove(dataTemp)
+	written, copyErr := io.Copy(file, io.LimitReader(&contextObjectReader{ctx: ctx, reader: reader}, size+1))
+	if copyErr != nil || written != size {
+		return errors.Join(fmt.Errorf("stage canvas media object: size mismatch"), copyErr, file.Close())
+	}
+	if err := file.Sync(); err != nil {
+		return errors.Join(fmt.Errorf("sync canvas media object: %w", err), file.Close())
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close canvas media object: %w", err)
+	}
+
+	metadataPath := path + ".meta.json"
+	metadata, err := json.Marshal(localImageJobObjectMetadata{ContentType: contentType})
+	if err != nil {
+		return fmt.Errorf("marshal canvas media metadata: %w", err)
+	}
+	metadataTemp, err := stageAdjacentFile(metadataPath, metadata)
+	if err != nil {
+		return fmt.Errorf("stage canvas media metadata: %w", err)
+	}
+	defer os.Remove(metadataTemp)
+	previousMetadata, metadataExisted, err := readPreviousMetadata(metadataPath)
+	if err != nil {
+		return fmt.Errorf("read previous canvas media metadata: %w", err)
+	}
+	if err := os.Rename(metadataTemp, metadataPath); err != nil {
+		return fmt.Errorf("commit canvas media metadata: %w", err)
+	}
+	metadataTemp = ""
+	if err := os.Rename(dataTemp, path); err != nil {
+		commitErr := fmt.Errorf("commit canvas media object: %w", err)
+		if rollbackErr := restoreMetadata(metadataPath, previousMetadata, metadataExisted); rollbackErr != nil {
+			return errors.Join(commitErr, fmt.Errorf("restore canvas media metadata: %w", rollbackErr))
+		}
+		return commitErr
+	}
+	dataTemp = ""
+	if err := syncDirectory(filepath.Dir(path)); err != nil {
+		return fmt.Errorf("sync canvas media object parent: %w", err)
+	}
+	return nil
+}
+
+func (s *localImageJobObjectStore) Open(ctx context.Context, key string) (io.ReadCloser, string, int64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, "", 0, err
+	}
+	path, err := s.objectPath(key, false)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || info.Size() > maxCanvasMediaObjectBytes {
+		return nil, "", 0, fmt.Errorf("canvas media object is invalid")
+	}
+	metadata, err := readRegularFile(path+".meta.json", maxImageJobObjectMetadataBytes)
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("read canvas media metadata: %w", err)
+	}
+	var meta localImageJobObjectMetadata
+	if err := json.Unmarshal(metadata, &meta); err != nil {
+		return nil, "", 0, fmt.Errorf("unmarshal canvas media metadata: %w", err)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	return file, meta.ContentType, info.Size(), nil
+}
+
+type contextObjectReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r *contextObjectReader) Read(buffer []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(buffer)
+}

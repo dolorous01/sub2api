@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 
@@ -10,7 +11,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
-const maxImageJobObjectBytes int64 = 20 << 20
+const (
+	maxImageJobObjectBytes    int64 = 64 << 20
+	maxCanvasMediaObjectBytes int64 = 512 << 20
+)
 
 type disabledImageJobObjectStore struct{}
 
@@ -20,6 +24,14 @@ func (*disabledImageJobObjectStore) Put(context.Context, string, []byte, string)
 
 func (*disabledImageJobObjectStore) Get(context.Context, string) (*service.ImageJobObject, error) {
 	return nil, service.ErrImageJobDisabled
+}
+
+func (*disabledImageJobObjectStore) PutReader(context.Context, string, io.Reader, int64, string) error {
+	return service.ErrImageJobDisabled
+}
+
+func (*disabledImageJobObjectStore) Open(context.Context, string) (io.ReadCloser, string, int64, error) {
+	return nil, "", 0, service.ErrImageJobDisabled
 }
 
 func (*disabledImageJobObjectStore) Delete(context.Context, string) error {

@@ -123,5 +123,34 @@ func RegisterUserRoutes(
 			monitors.GET("", h.ChannelMonitor.List)
 			monitors.GET("/:id/status", h.ChannelMonitor.GetStatus)
 		}
+
+		registerUserImageCanvasRoutes(authenticated, h, settingService)
+	}
+}
+
+func registerUserImageCanvasRoutes(authenticated *gin.RouterGroup, h *handler.Handlers, settingService *service.SettingService) {
+	if h == nil || h.ImageCanvas == nil {
+		return
+	}
+	canvas := authenticated.Group("/image-canvas")
+	canvas.Use(middleware.ImageCanvasEnabled(settingService))
+	{
+		canvas.GET("/config", h.ImageCanvas.GetConfig)
+		canvas.GET("/projects", h.ImageCanvas.ListProjects)
+		canvas.POST("/projects", h.ImageCanvas.CreateProject)
+		canvas.GET("/projects/:project_id", h.ImageCanvas.GetProject)
+		canvas.PATCH("/projects/:project_id", h.ImageCanvas.UpdateProject)
+		canvas.DELETE("/projects/:project_id", h.ImageCanvas.DeleteProject)
+		canvas.POST("/assets", h.ImageCanvas.UploadAsset)
+		canvas.GET("/assets/:asset_id", h.ImageCanvas.DownloadAsset)
+		canvas.POST("/jobs", h.ImageCanvas.CreateJob)
+		canvas.GET("/jobs/:job_id", h.ImageCanvas.GetJob)
+		canvas.GET("/jobs/:job_id/events", h.ImageCanvas.StreamJobEvents)
+		canvas.DELETE("/jobs/:job_id", h.ImageCanvas.CancelJob)
+		canvas.GET("/jobs/:job_id/results/:index", h.ImageCanvas.DownloadJobResult)
+		canvas.POST("/media/video/tasks", h.ImageCanvas.CreateVideoTask)
+		canvas.POST("/media/audio", h.ImageCanvas.GenerateAudio)
+		canvas.GET("/media/tasks/:task_id", h.ImageCanvas.GetMediaTask)
+		canvas.DELETE("/media/tasks/:task_id", h.ImageCanvas.CancelMediaTask)
 	}
 }

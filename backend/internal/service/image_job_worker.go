@@ -1,11 +1,16 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -35,11 +40,22 @@ type ImageJobWorker struct {
 	cfg           *config.Config
 	metrics       *ImageJobMetrics
 	cleanup       *ImageJobCleanup
+	runtime       *ImageJobRuntimeSettingsService
 
-	mu      sync.Mutex
-	started bool
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
+	mu             sync.Mutex
+	started        bool
+	cancel         context.CancelFunc
+	wg             sync.WaitGroup
+	workers        map[string]chan struct{}
+	workerSequence uint64
+	targetWorkers  int
+	runningWorkers int
+}
+
+type ImageJobWorkerSnapshot struct {
+	Started        bool `json:"started"`
+	TargetWorkers  int  `json:"target_workers"`
+	RunningWorkers int  `json:"running_workers"`
 }
 
 func NewImageJobWorker(
@@ -51,15 +67,21 @@ func NewImageJobWorker(
 	billing *ImageJobBilling,
 	cfg *config.Config,
 	metrics *ImageJobMetrics,
+	runtime ...*ImageJobRuntimeSettingsService,
 ) *ImageJobWorker {
 	if metrics == nil {
 		metrics = &ImageJobMetrics{}
 	}
-	return &ImageJobWorker{
+	worker := &ImageJobWorker{
 		repo: repo, store: store, executor: executor, apiKeys: apiKeys,
 		subscriptions: subscriptions, billing: billing, cfg: cfg, metrics: metrics,
 		cleanup: NewImageJobCleanup(repo, store, metrics),
+		workers: make(map[string]chan struct{}),
 	}
+	if len(runtime) > 0 {
+		worker.runtime = runtime[0]
+	}
+	return worker
 }
 
 func (w *ImageJobWorker) Start() {
@@ -76,21 +98,98 @@ func (w *ImageJobWorker) Start() {
 	w.started = true
 	w.mu.Unlock()
 
-	settings := w.cfg.Gateway.ImageJobs
+	if w.runtime != nil {
+		if err := w.runtime.Refresh(ctx); err != nil {
+			logger.LegacyPrintf("service.image_job_worker", "load runtime settings: %v", err)
+		}
+	}
+	settings := w.currentSettings()
 	if w.repo != nil {
 		cutoff := timezone.Now().Add(-time.Duration(settings.TaskTimeoutSeconds) * time.Second)
 		if _, _, err := w.repo.RecoverStale(ctx, cutoff); err != nil {
 			logger.LegacyPrintf("service.image_job_worker", "recover stale image jobs: %v", err)
 		}
 	}
-	for index := 0; index < settings.WorkerConcurrency; index++ {
-		workerID := fmt.Sprintf("image-worker-%d-%s", index+1, uuid.NewString())
-		w.wg.Add(1)
-		go w.runLoop(ctx, workerID)
-	}
+	w.resizeWorkers(ctx, settings.WorkerConcurrency)
+	w.wg.Add(1)
+	go w.superviseWorkers(ctx)
 	maintenanceInterval, cleanupInterval := ImageJobMaintenanceIntervals(w.cfg)
 	w.wg.Add(1)
 	go w.runMaintenance(ctx, maintenanceInterval, cleanupInterval)
+}
+
+func (w *ImageJobWorker) superviseWorkers(ctx context.Context) {
+	defer w.wg.Done()
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if w.runtime != nil {
+				if err := w.runtime.Refresh(ctx); err != nil && !errors.Is(err, context.Canceled) {
+					logger.LegacyPrintf("service.image_job_worker", "refresh runtime settings: %v", err)
+				}
+			}
+			w.resizeWorkers(ctx, w.currentSettings().WorkerConcurrency)
+		}
+	}
+}
+
+func (w *ImageJobWorker) resizeWorkers(ctx context.Context, desired int) {
+	if desired < 1 {
+		desired = 1
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.started {
+		return
+	}
+	w.targetWorkers = desired
+	for len(w.workers) < desired {
+		w.workerSequence++
+		workerID := fmt.Sprintf("image-worker-%d-%s", w.workerSequence, uuid.NewString())
+		retire := make(chan struct{})
+		w.workers[workerID] = retire
+		w.runningWorkers++
+		w.wg.Add(1)
+		go w.runLoop(ctx, workerID, retire)
+	}
+	if len(w.workers) <= desired {
+		return
+	}
+	workerIDs := make([]string, 0, len(w.workers))
+	for workerID := range w.workers {
+		workerIDs = append(workerIDs, workerID)
+	}
+	sort.Strings(workerIDs)
+	for index := len(workerIDs) - 1; len(w.workers) > desired && index >= 0; index-- {
+		workerID := workerIDs[index]
+		retire := w.workers[workerID]
+		delete(w.workers, workerID)
+		close(retire)
+	}
+}
+
+func (w *ImageJobWorker) workerExited(workerID string) {
+	w.mu.Lock()
+	delete(w.workers, workerID)
+	if w.runningWorkers > 0 {
+		w.runningWorkers--
+	}
+	w.mu.Unlock()
+}
+
+func (w *ImageJobWorker) Snapshot() ImageJobWorkerSnapshot {
+	if w == nil {
+		return ImageJobWorkerSnapshot{}
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return ImageJobWorkerSnapshot{
+		Started: w.started, TargetWorkers: w.targetWorkers, RunningWorkers: w.runningWorkers,
+	}
 }
 
 func (w *ImageJobWorker) runMaintenance(ctx context.Context, staleInterval, cleanupInterval time.Duration) {
@@ -111,7 +210,7 @@ func (w *ImageJobWorker) runMaintenance(ctx context.Context, staleInterval, clea
 			return
 		case <-staleTicker.C:
 			if w.repo != nil {
-				cutoff := timezone.Now().Add(-time.Duration(w.cfg.Gateway.ImageJobs.TaskTimeoutSeconds) * time.Second)
+				cutoff := timezone.Now().Add(-time.Duration(w.currentSettings().TaskTimeoutSeconds) * time.Second)
 				if _, _, err := w.repo.RecoverStale(ctx, cutoff); err != nil {
 					logger.LegacyPrintf("service.image_job_worker", "recover stale image jobs: %v", err)
 				}
@@ -138,15 +237,21 @@ func (w *ImageJobWorker) Stop() {
 	cancel := w.cancel
 	w.cancel = nil
 	w.started = false
+	w.targetWorkers = 0
 	w.mu.Unlock()
 	if cancel != nil {
 		cancel()
 	}
 	w.wg.Wait()
+	w.mu.Lock()
+	w.workers = make(map[string]chan struct{})
+	w.runningWorkers = 0
+	w.mu.Unlock()
 }
 
-func (w *ImageJobWorker) runLoop(ctx context.Context, workerID string) {
+func (w *ImageJobWorker) runLoop(ctx context.Context, workerID string, retire <-chan struct{}) {
 	defer w.wg.Done()
+	defer w.workerExited(workerID)
 	poll := time.Duration(w.cfg.Gateway.ImageJobs.PollIntervalMilliseconds) * time.Millisecond
 	if poll <= 0 {
 		poll = 500 * time.Millisecond
@@ -156,6 +261,8 @@ func (w *ImageJobWorker) runLoop(ctx context.Context, workerID string) {
 	for {
 		select {
 		case <-ctx.Done():
+			return
+		case <-retire:
 			return
 		case <-timer.C:
 		}
@@ -176,7 +283,7 @@ func (w *ImageJobWorker) runOnce(ctx context.Context, workerID string) error {
 	}
 	job := claim.Job
 	w.metrics.JobClaimed(time.Since(job.CreatedAt))
-	timeout := time.Duration(w.cfg.Gateway.ImageJobs.TaskTimeoutSeconds) * time.Second
+	timeout := time.Duration(w.currentSettings().TaskTimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 30 * time.Minute
 	}
@@ -185,6 +292,16 @@ func (w *ImageJobWorker) runOnce(ctx context.Context, workerID string) error {
 	stopHeartbeat := w.startHeartbeat(jobCtx, claim)
 	defer stopHeartbeat()
 	return w.executeClaim(jobCtx, claim)
+}
+
+func (w *ImageJobWorker) currentSettings() ImageJobRuntimeSettings {
+	if w != nil && w.runtime != nil {
+		return w.runtime.Current()
+	}
+	if w != nil {
+		return defaultImageJobRuntimeSettings(w.cfg)
+	}
+	return defaultImageJobRuntimeSettings(nil)
 }
 
 func (w *ImageJobWorker) startHeartbeat(ctx context.Context, claim *ImageJobClaim) func() {
@@ -252,7 +369,7 @@ func (w *ImageJobWorker) executeClaim(ctx context.Context, claim *ImageJobClaim)
 	if job.Mode == "sequence" {
 		return w.executeSequenceClaim(ctx, claim, apiKey, subscription, mapping, mappedModel, startedAt)
 	}
-	return w.executeBatchClaim(ctx, claim, apiKey, subscription, mapping, mappedModel, startedAt)
+	return w.executeBatchClaim(ctx, claim, apiKey, subscription, startedAt)
 }
 
 func (w *ImageJobWorker) executeBatchClaim(
@@ -260,51 +377,109 @@ func (w *ImageJobWorker) executeBatchClaim(
 	claim *ImageJobClaim,
 	apiKey *APIKey,
 	subscription *UserSubscription,
-	mapping ChannelMappingResult,
-	mappedModel string,
 	startedAt time.Time,
 ) error {
 	job := claim.Job
-	body, contentType, parsed, err := BuildOpenAIImagesRequest(ctx, w.store, job.Request)
-	if err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return w.markTerminal(ctx, claim, ImageJobStatusFailed, 0, nil, imageJobErrorFromExecution(err), startedAt, 0)
+	plan := append([]string(nil), job.AttemptPlan...)
+	if len(plan) == 0 {
+		plan = []string{job.Request.Model}
 	}
-	if canceled, cancelErr := w.repo.IsCancelRequested(ctx, job.ID, claim.AttemptID); cancelErr != nil {
-		return cancelErr
-	} else if canceled {
-		return w.markTerminal(ctx, claim, ImageJobStatusCanceled, 0, nil, nil, startedAt, 0)
-	}
-	if err := w.repo.MarkUpstreamStarted(ctx, job.ID, claim.AttemptID, mappedModel); err != nil {
-		return err
-	}
-	job.ExecutionPhase = "upstream"
-	sink := NewJobImageResultSink(job, claim.AttemptID, w.repo, w.store, w.metrics)
-	execution, executeErr := w.executor.Execute(ctx, ImageExecutionInput{
-		APIKey: apiKey, User: apiKey.User, Subscription: subscription,
-		Body: body, Parsed: parsed, ChannelMapping: mapping,
-		SessionHash:     job.RequestDigest,
-		InboundEndpoint: job.Endpoint, RequestPayloadHash: job.RequestDigest,
-		RequestHeaders: http.Header{"Content-Type": []string{contentType}},
-		Observer:       w.imageExecutionObserver(),
-	}, sink)
-	completed := sink.PersistedCount()
-	status := ImageJobStatusCompleted
+	var execution *ImageExecutionResult
+	var mapping ChannelMappingResult
+	var mappedModel, successfulModel string
 	var terminalError *ImageJobError
-	if executeErr != nil {
-		terminalError = imageJobErrorFromExecution(executeErr)
+	status := ImageJobStatusFailed
+	completed := 0
+
+	for position, model := range plan {
+		request := job.Request
+		request.Model = strings.TrimSpace(model)
+		attemptStartedAt := timezone.Now()
+		body, contentType, parsed, err := BuildOpenAIImagesRequest(ctx, w.store, request)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			terminalError = imageJobErrorFromExecution(err)
+			break
+		}
+		if canceled, cancelErr := w.repo.IsCancelRequested(ctx, job.ID, claim.AttemptID); cancelErr != nil {
+			return cancelErr
+		} else if canceled {
+			return w.markTerminal(ctx, claim, ImageJobStatusCanceled, 0, nil, nil, startedAt, 0)
+		}
+		mapping = ChannelMappingResult{MappedModel: request.Model}
+		if openAIExecutor, ok := w.executor.(*OpenAIImageExecutor); ok && openAIExecutor.gateway != nil {
+			if current, _ := openAIExecutor.gateway.ResolveChannelMappingAndRestrict(ctx, apiKey.GroupID, request.Model); strings.TrimSpace(current.MappedModel) != "" {
+				mapping = current
+			}
+		}
+		mappedModel = strings.TrimSpace(firstNonEmptyString(mapping.MappedModel, request.Model))
+		if err := w.repo.MarkUpstreamStarted(ctx, job.ID, claim.AttemptID, mappedModel); err != nil {
+			return err
+		}
+		job.ExecutionPhase = "upstream"
+		sink := NewJobImageResultSink(job, claim.AttemptID, w.repo, w.store, w.metrics)
+		attemptExecution, executeErr := w.executor.Execute(ctx, ImageExecutionInput{
+			APIKey: apiKey, User: apiKey.User, Subscription: subscription,
+			Body: body, Parsed: parsed, ChannelMapping: mapping,
+			SessionHash:     job.RequestDigest + ":" + request.Model,
+			InboundEndpoint: job.Endpoint, RequestPayloadHash: job.RequestDigest,
+			RequestHeaders: http.Header{"Content-Type": []string{contentType}},
+			Observer:       w.imageExecutionObserver(),
+		}, sink)
+		execution = attemptExecution
+		completed = sink.PersistedCount()
+		attemptError := imageJobErrorFromExecution(executeErr)
+		if executeErr == nil && completed == 0 {
+			attemptError = &ImageJobError{Type: "upstream_error", Code: "no_usable_image", Message: "Upstream returned no usable image", Retryable: true}
+		}
+		if completed > 0 {
+			successfulModel = request.Model
+		}
+		attempt := ImageJobAttempt{
+			Model: request.Model, Position: position, StartedAt: attemptStartedAt,
+			LatencyMS: time.Since(attemptStartedAt).Milliseconds(), FinalCount: completed,
+		}
+		if attemptError != nil {
+			attempt.ErrorClass = attemptError.Code
+		}
+		if recorder, ok := w.repo.(ImageJobCanvasAttemptRepository); ok && len(job.AttemptPlan) > 0 {
+			if err := recorder.RecordImageModelAttempt(context.WithoutCancel(ctx), job.ID, claim.AttemptID, attempt, successfulModel); err != nil {
+				return err
+			}
+		}
+
+		if executeErr == nil && completed >= job.RequestedCount {
+			status = ImageJobStatusCompleted
+			terminalError = nil
+			break
+		}
 		if completed > 0 {
 			status = ImageJobStatusPartial
-		} else if imageExecutionIndeterminate(ctx, executeErr) {
+			terminalError = attemptError
+			if terminalError == nil {
+				terminalError = &ImageJobError{Type: "upstream_error", Code: "incomplete_output", Message: "Upstream returned fewer images than requested", Retryable: true}
+			}
+			break
+		}
+		terminalError = attemptError
+		eligible := executeErr == nil || isModelFallbackEligible(executeErr)
+		if eligible && position+1 < len(plan) {
+			if recorder, ok := w.repo.(ImageJobCanvasAttemptRepository); ok {
+				if err := recorder.SetExecutionPhase(context.WithoutCancel(ctx), job.ID, claim.AttemptID, "falling_back"); err != nil {
+					return err
+				}
+			}
+			job.ExecutionPhase = "falling_back"
+			continue
+		}
+		if imageExecutionIndeterminate(ctx, executeErr) {
 			status = ImageJobStatusIndeterminate
 		} else {
 			status = ImageJobStatusFailed
 		}
-	} else if completed < job.RequestedCount {
-		status = ImageJobStatusPartial
-		terminalError = &ImageJobError{Type: "upstream_error", Code: "incomplete_output", Message: "Upstream returned fewer images than requested", Retryable: true}
+		break
 	}
 	if canceled, cancelErr := w.repo.IsCancelRequested(context.WithoutCancel(ctx), job.ID, claim.AttemptID); cancelErr == nil && canceled {
 		if completed == 0 {
@@ -317,14 +492,25 @@ func (w *ImageJobWorker) executeBatchClaim(
 			terminalError = &ImageJobError{Type: "canceled", Code: "cancel_requested", Message: "Image job was canceled after partial completion", Retryable: false}
 		}
 	}
+	if completed > 0 {
+		job.SuccessfulModel = successfulModel
+		job.Request.Model = successfulModel
+		job.RequestedModel = successfulModel
+		if recorder, ok := w.repo.(ImageJobCanvasAttemptRepository); ok {
+			if err := recorder.SetExecutionPhase(context.WithoutCancel(ctx), job.ID, claim.AttemptID, "saving"); err != nil {
+				return err
+			}
+		}
+		job.ExecutionPhase = "saving"
+	}
 
 	settlementDelta := 0.0
 	settlement, settleErr := w.billing.Settle(context.WithoutCancel(ctx), ImageJobSettlementInput{
 		Job: job, Execution: execution, APIKey: apiKey, User: apiKey.User,
 		Subscription: subscription, PersistedResultCount: completed,
 		InboundEndpoint: job.Endpoint, UpstreamEndpoint: job.Endpoint,
-		RequestPayloadHash: job.RequestDigest, QuotaPlatform: PlatformOpenAI,
-		ChannelUsageFields: mapping.ToUsageFields(job.RequestedModel, mappedModel),
+		RequestPayloadHash: job.RequestDigest, QuotaPlatform: imageJobQuotaPlatform(job, execution),
+		ChannelUsageFields: mapping.ToUsageFields(firstNonEmptyString(successfulModel, job.RequestedModel), mappedModel),
 		APIKeyService:      imageJobAPIKeyQuotaUpdater(w.apiKeys),
 	})
 	if settleErr != nil {
@@ -359,6 +545,27 @@ func (w *ImageJobWorker) executeBatchClaim(
 	return w.markTerminal(context.WithoutCancel(ctx), claim, status, completed, execution, terminalError, startedAt, settlementDelta)
 }
 
+func isModelFallbackEligible(err error) bool {
+	var executionError *ImageExecutionError
+	if !errors.As(err, &executionError) || executionError == nil {
+		return false
+	}
+	if executionError.Code == "content_policy_violation" {
+		return false
+	}
+	return executionError.Retryable && (executionError.Status == 0 || executionError.Status == http.StatusTooManyRequests || executionError.Status >= 500)
+}
+
+func imageJobQuotaPlatform(job *ImageJob, execution *ImageExecutionResult) string {
+	if execution != nil && execution.Account != nil && execution.Account.Platform == PlatformGrok {
+		return PlatformGrok
+	}
+	if job != nil && normalizeImageProvider(job.Request.Provider, job.Request.Model) == ImageProviderGrok {
+		return PlatformGrok
+	}
+	return PlatformOpenAI
+}
+
 func (w *ImageJobWorker) executeSequenceClaim(
 	ctx context.Context,
 	claim *ImageJobClaim,
@@ -372,7 +579,7 @@ func (w *ImageJobWorker) executeSequenceClaim(
 	actualCost := 0.0
 	sequence := &ImageSequenceExecutor{
 		job: job, executor: w.executor, store: w.store,
-		maxInputs: w.cfg.Gateway.ImageJobs.MaxInputImages,
+		maxInputs: w.currentSettings().MaxInputImages,
 		input: ImageExecutionInput{
 			APIKey: apiKey, User: apiKey.User, Subscription: subscription,
 			ChannelMapping: mapping, SessionHash: job.RequestDigest,
@@ -401,7 +608,7 @@ func (w *ImageJobWorker) executeSequenceClaim(
 				APIKey: apiKey, User: apiKey.User, Subscription: subscription,
 				PersistedResultCount: 1, InboundEndpoint: job.Endpoint,
 				UpstreamEndpoint: job.Endpoint, RequestPayloadHash: job.RequestDigest,
-				QuotaPlatform:      PlatformOpenAI,
+				QuotaPlatform:      imageJobQuotaPlatform(job, execution),
 				ChannelUsageFields: mapping.ToUsageFields(job.RequestedModel, mappedModel),
 				APIKeyService:      imageJobAPIKeyQuotaUpdater(w.apiKeys),
 			})
@@ -703,6 +910,20 @@ func (s *JobImageResultSink) Final(ctx context.Context, artifact ImageArtifact) 
 	if err != nil {
 		return err
 	}
+	if s.job.ProjectID != nil && (artifact.Width <= 0 || artifact.Height <= 0) {
+		config, format, decodeErr := image.DecodeConfig(bytes.NewReader(artifact.Data))
+		if decodeErr != nil {
+			return fmt.Errorf("decode canvas image result %d: %w", artifact.Index, decodeErr)
+		}
+		if config.Width <= 0 || config.Height <= 0 {
+			return fmt.Errorf("decode canvas image result %d: %w", artifact.Index, ErrImageAssetInvalid)
+		}
+		if normalizeImageCanvasFormat(format) != extension {
+			return fmt.Errorf("decode canvas image result %d: %w: decoded format does not match MIME type", artifact.Index, ErrImageAssetInvalid)
+		}
+		artifact.Width = config.Width
+		artifact.Height = config.Height
+	}
 	objectKey := fmt.Sprintf("image-jobs/%d/%s/results/%d.%s", s.job.APIKeyID, s.job.PublicID, artifact.Index, extension)
 	if err := s.store.Put(ctx, objectKey, artifact.Data, mimeType); err != nil {
 		if s.metrics != nil {
@@ -710,10 +931,12 @@ func (s *JobImageResultSink) Final(ctx context.Context, artifact ImageArtifact) 
 		}
 		return fmt.Errorf("store image result %d: %w", artifact.Index, err)
 	}
+	digest := sha256.Sum256(artifact.Data)
 	inserted, err := s.repo.UpsertResult(ctx, s.job.ID, s.attemptID, &ImageJobResult{
 		JobID: s.job.ID, Index: artifact.Index, Status: "completed", ObjectKey: objectKey,
 		MIMEType: mimeType, ByteSize: int64(len(artifact.Data)), Width: artifact.Width, Height: artifact.Height,
-		SizeTier: artifact.SizeTier, RevisedPrompt: artifact.RevisedPrompt, UpstreamOutputID: artifact.UpstreamOutputID,
+		SHA256: hex.EncodeToString(digest[:]), SizeTier: artifact.SizeTier,
+		RevisedPrompt: artifact.RevisedPrompt, UpstreamOutputID: artifact.UpstreamOutputID,
 	})
 	if err != nil {
 		// Do not delete the deterministic key here. A concurrent/replayed

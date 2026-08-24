@@ -34,6 +34,7 @@ type ImageJobSettlementInput struct {
 	UpstreamEndpoint     string
 	UserAgent            string
 	IPAddress            string
+	RequestPayloadHash   string
 	APIKeyService        APIKeyQuotaUpdater
 	QuotaPlatform        string
 	ChannelUsageFields
@@ -103,6 +104,37 @@ func (b *ImageJobBilling) Estimate(ctx context.Context, apiKey *APIKey, subscrip
 		reservation.SubscriptionID = &subscriptionID
 	}
 	return reservation, nil
+}
+
+func (b *ImageJobBilling) EstimateCandidates(
+	ctx context.Context,
+	apiKey *APIKey,
+	subscription *UserSubscription,
+	request ImageJobRequest,
+	models []string,
+) (ImageJobReservation, error) {
+	if len(models) == 0 {
+		return ImageJobReservation{}, fmt.Errorf("%w: at least one candidate model is required", ErrImageJobReservationUnavailable)
+	}
+	var highest ImageJobReservation
+	for _, model := range models {
+		candidate := request
+		candidate.Model = strings.TrimSpace(model)
+		if candidate.Model == "" {
+			return ImageJobReservation{}, fmt.Errorf("%w: candidate model must not be empty", ErrImageJobReservationUnavailable)
+		}
+		reservation, err := b.Estimate(ctx, apiKey, subscription, candidate)
+		if err != nil {
+			return ImageJobReservation{}, err
+		}
+		if highest.AmountUSD == 0 || reservation.AmountUSD > highest.AmountUSD {
+			highest = reservation
+		}
+	}
+	if highest.AmountUSD <= 0 {
+		return ImageJobReservation{}, ErrImageJobReservationUnavailable
+	}
+	return highest, nil
 }
 
 func (b *ImageJobBilling) Settle(ctx context.Context, input ImageJobSettlementInput) (*CostBreakdown, error) {
@@ -187,7 +219,7 @@ func (b *ImageJobBilling) Settle(ctx context.Context, input ImageJobSettlementIn
 		BillingRequestID:      requestID,
 		BillingType:           &billingType,
 		BillingSubscriptionID: input.Job.ReservationSubscriptionID,
-		RequestPayloadHash:    fmt.Sprintf("%s:%d", input.Job.RequestDigest, settlementIndex),
+		RequestPayloadHash:    fmt.Sprintf("%s:%d", firstNonEmptyString(input.RequestPayloadHash, input.Job.RequestDigest), settlementIndex),
 		APIKeyService:         input.APIKeyService,
 		QuotaPlatform:         input.QuotaPlatform,
 		ChannelUsageFields:    input.ChannelUsageFields,
@@ -260,7 +292,7 @@ func (s *OpenAIGatewayService) EstimateImageJobCost(ctx context.Context, apiKey 
 		Model:        model,
 		BillingModel: model,
 		ImageCount:   count,
-		ImageSize:    req.Size,
+		ImageSize:    firstNonEmptyString(req.Size, req.Resolution),
 	}
 	ApplyOpenAIImageBillingResolution(result)
 	return s.calculateOpenAIImageCost(ctx, model, apiKey, result, imageMultiplier), false, nil

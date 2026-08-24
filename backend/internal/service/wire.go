@@ -559,6 +559,17 @@ func ProvideImageJobMetrics() *ImageJobMetrics {
 	return &ImageJobMetrics{}
 }
 
+func ProvideImageJobRuntimeSettingsService(
+	repo SettingRepository,
+	cfg *config.Config,
+) *ImageJobRuntimeSettingsService {
+	service := NewImageJobRuntimeSettingsService(repo, cfg)
+	if err := service.Refresh(context.Background()); err != nil {
+		logger.LegacyPrintf("service.image_job_runtime_settings", "load runtime settings: %v", err)
+	}
+	return service
+}
+
 func ProvideOpenAIImageExecutor(
 	gateway *OpenAIGatewayService,
 	concurrency *ConcurrencyService,
@@ -576,8 +587,25 @@ func ProvideImageJobService(
 	billing *ImageJobBilling,
 	metrics *ImageJobMetrics,
 	cfg *config.Config,
+	runtime *ImageJobRuntimeSettingsService,
 ) *ImageJobService {
-	svc := NewImageJobService(repo, store, executor, apiKeys, subscriptions, billing, metrics, cfg)
+	svc := NewImageJobService(repo, store, executor, apiKeys, subscriptions, billing, metrics, cfg, runtime)
+	svc.Start()
+	return svc
+}
+
+func ProvideCanvasMediaService(
+	tasks CanvasMediaTaskRepository,
+	projects *ImageCanvasProjectService,
+	policies *ImageModelPolicyService,
+	catalog ImageModelCatalog,
+	apiKeys *APIKeyService,
+	subscriptions *SubscriptionService,
+	billing *BillingCacheService,
+	gateway *OpenAIGatewayService,
+	moderation *ContentModerationService,
+) *CanvasMediaService {
+	svc := NewCanvasMediaService(tasks, projects, policies, catalog, apiKeys, subscriptions, billing, gateway, moderation)
 	svc.Start()
 	return svc
 }
@@ -606,7 +634,13 @@ var ProviderSet = wire.NewSet(
 	ProvideOpenAIImageExecutor,
 	ProvideImageJobBilling,
 	ProvideImageJobMetrics,
+	ProvideImageJobRuntimeSettingsService,
 	ProvideImageJobService,
+	NewImageModelPolicyService,
+	ProvideImageModelCatalog,
+	NewImageCanvasProjectService,
+	NewImageCanvasJobService,
+	ProvideCanvasMediaService,
 	wire.Bind(new(AccountRuntimeBlocker), new(*OpenAIGatewayService)),
 	NewOAuthService,
 	ProvideOpenAIOAuthService,

@@ -42,6 +42,7 @@ func ProvideAdminHandlers(
 	affiliateHandler *admin.AffiliateHandler,
 	complianceHandler *admin.ComplianceHandler,
 	imageJobHandler *admin.ImageJobHandler,
+	imageCanvasHandler *admin.ImageCanvasHandler,
 ) *AdminHandlers {
 	return &AdminHandlers{
 		Dashboard:              dashboardHandler,
@@ -77,6 +78,7 @@ func ProvideAdminHandlers(
 		Affiliate:              affiliateHandler,
 		Compliance:             complianceHandler,
 		ImageJob:               imageJobHandler,
+		ImageCanvas:            imageCanvasHandler,
 	}
 }
 
@@ -90,6 +92,16 @@ func ProvideSettingHandler(settingService *service.SettingService, buildInfo Bui
 	h := NewSettingHandler(settingService, buildInfo.Version)
 	h.SetNotificationEmailService(notificationEmailService)
 	return h
+}
+
+func ProvideImageCanvasHandler(
+	projects *service.ImageCanvasProjectService,
+	jobs *service.ImageCanvasJobService,
+	policies *service.ImageModelPolicyService,
+	catalog service.ImageModelCatalog,
+	media *service.CanvasMediaService,
+) *ImageCanvasHandler {
+	return NewImageCanvasHandler(projects, jobs, policies, catalog).SetMediaService(media)
 }
 
 // ProvideAdminSettingHandler creates admin.SettingHandler with notification template APIs.
@@ -117,6 +129,7 @@ func ProvideHandlers(
 	paymentHandler *PaymentHandler,
 	paymentWebhookHandler *PaymentWebhookHandler,
 	availableChannelHandler *AvailableChannelHandler,
+	imageCanvasHandler *ImageCanvasHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
@@ -137,6 +150,7 @@ func ProvideHandlers(
 		Payment:          paymentHandler,
 		PaymentWebhook:   paymentWebhookHandler,
 		AvailableChannel: availableChannelHandler,
+		ImageCanvas:      imageCanvasHandler,
 	}
 }
 
@@ -158,6 +172,7 @@ var ProviderSet = wire.NewSet(
 	NewPaymentHandler,
 	NewPaymentWebhookHandler,
 	NewAvailableChannelHandler,
+	ProvideImageCanvasHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,
@@ -193,6 +208,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewAffiliateHandler,
 	admin.NewComplianceHandler,
 	admin.NewImageJobHandler,
+	admin.NewImageCanvasHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,

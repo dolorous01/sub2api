@@ -3,16 +3,21 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "packageManager": "pnpm@10.28.2",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build",
+    "build:canvas": "pnpm --filter @sub2api/infinite-canvas build",
+    "build": "pnpm run build:canvas && vue-tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
     "lint:check": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts",
     "typecheck": "vue-tsc --noEmit",
+    "typecheck:canvas": "pnpm --filter @sub2api/infinite-canvas typecheck",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:canvas": "pnpm --filter @sub2api/infinite-canvas test",
+    "check:canvas-release": "node infinite-canvas/scripts/check-upstream.mjs && node infinite-canvas/scripts/check-license.mjs"
   },
   "dependencies": {
     "@airwallex/components-sdk": "^1.30.2",

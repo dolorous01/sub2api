@@ -21,7 +21,9 @@ const imageJobColumns = `
 	usage, settlement_status, attempt_id, worker_id, execution_phase,
 	heartbeat_at, cancel_requested_at, canceled_at,
 	error_type, error_code, error_message, error_retryable,
-	started_at, finished_at, expires_at, created_at, updated_at`
+	started_at, finished_at, expires_at, created_at, updated_at,
+	project_id, client_node_id, selected_model, policy_version,
+	attempt_plan, successful_model, attempt_log`
 
 type imageJobRepository struct {
 	client *dbent.Client
@@ -44,6 +46,19 @@ func (r *imageJobRepository) CreateReserved(ctx context.Context, create *service
 	requestJSON, err := json.Marshal(create.Request)
 	if err != nil {
 		return false, nil, fmt.Errorf("marshal image job request: %w", err)
+	}
+	canvasProjectID, clientNodeID, selectedModel, policyVersion := any(nil), any(nil), any(nil), any(nil)
+	attemptPlan := []string{}
+	if create.Canvas != nil {
+		canvasProjectID = nullableInt64Pointer(create.Canvas.ProjectID)
+		clientNodeID = nullableString(create.Canvas.ClientNodeID)
+		selectedModel = nullableString(create.Canvas.SelectedModel)
+		policyVersion = create.Canvas.PolicyVersion
+		attemptPlan = append(attemptPlan, create.Canvas.AttemptPlan...)
+	}
+	attemptPlanJSON, err := json.Marshal(attemptPlan)
+	if err != nil {
+		return false, nil, fmt.Errorf("marshal image job attempt plan: %w", err)
 	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -72,6 +87,23 @@ func (r *imageJobRepository) CreateReserved(ctx context.Context, create *service
 			return false, nil, fmt.Errorf("load idempotent image job before reservation: %w", err)
 		}
 	}
+	if create.MaxActiveJobsPerUser > 0 {
+		// Serialize admission for one user so concurrent submissions cannot race
+		// past the configured active-job limit.
+		if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, create.UserID); err != nil {
+			return false, nil, fmt.Errorf("lock image job user admission: %w", err)
+		}
+		var active int
+		if err := tx.QueryRowContext(ctx, `
+			SELECT COUNT(*)
+			FROM image_jobs
+			WHERE user_id = $1 AND status IN ('queued', 'running')`, create.UserID).Scan(&active); err != nil {
+			return false, nil, fmt.Errorf("count active image jobs: %w", err)
+		}
+		if active >= create.MaxActiveJobsPerUser {
+			return false, nil, service.ErrImageJobQueueFull
+		}
+	}
 	if err := validateImageJobReservation(ctx, tx, create); err != nil {
 		return false, nil, err
 	}
@@ -82,12 +114,14 @@ func (r *imageJobRepository) CreateReserved(ctx context.Context, create *service
 			requested_model, mapped_model, status, requested_count, completed_count,
 			request, request_digest, idempotency_key_hash, reserved_usd,
 			reservation_billing_type, reservation_subscription_id,
-			reservation_status, settlement_status, execution_phase, expires_at
+			reservation_status, settlement_status, execution_phase, expires_at,
+			project_id, client_node_id, selected_model, policy_version, attempt_plan
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9, 'queued', $10, 0,
 			$11::jsonb, $12, $13, $14,
-			$15, $16, 'held', 'pending', 'preflight', $17
+			$15, $16, 'held', 'pending', 'preflight', $17,
+			$18, $19, $20, $21, $22::jsonb
 		)
 		ON CONFLICT (api_key_id, idempotency_key_hash)
 			WHERE idempotency_key_hash IS NOT NULL
@@ -110,6 +144,11 @@ func (r *imageJobRepository) CreateReserved(ctx context.Context, create *service
 		int(create.ReservationBillingType),
 		nullableInt64Pointer(create.ReservationSubscriptionID),
 		create.ExpiresAt,
+		canvasProjectID,
+		clientNodeID,
+		selectedModel,
+		policyVersion,
+		string(attemptPlanJSON),
 	)
 	job, err := scanImageJob(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -352,6 +391,35 @@ func (r *imageJobRepository) MarkUpstreamStarted(ctx context.Context, jobID int6
 	return imageJobCASResult(result, err, "mark image job upstream started")
 }
 
+func (r *imageJobRepository) SetExecutionPhase(ctx context.Context, jobID int64, attemptID, phase string) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE image_jobs
+		SET execution_phase = $3, heartbeat_at = NOW(), updated_at = NOW()
+		WHERE id = $1 AND attempt_id = $2 AND status = 'running'`, jobID, attemptID, strings.TrimSpace(phase))
+	return imageJobCASResult(result, err, "set image job execution phase")
+}
+
+func (r *imageJobRepository) RecordImageModelAttempt(
+	ctx context.Context,
+	jobID int64,
+	attemptID string,
+	attempt service.ImageJobAttempt,
+	successfulModel string,
+) error {
+	encoded, err := json.Marshal([]service.ImageJobAttempt{attempt})
+	if err != nil {
+		return fmt.Errorf("marshal image model attempt: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE image_jobs
+		SET attempt_log = attempt_log || $3::jsonb,
+			successful_model = COALESCE(NULLIF($4, ''), successful_model),
+			heartbeat_at = NOW(), updated_at = NOW()
+		WHERE id = $1 AND attempt_id = $2 AND status = 'running'`,
+		jobID, attemptID, string(encoded), strings.TrimSpace(successfulModel))
+	return imageJobCASResult(result, err, "record image model attempt")
+}
+
 func (r *imageJobRepository) Heartbeat(ctx context.Context, jobID int64, attemptID string, at time.Time) error {
 	result, err := r.db.ExecContext(ctx, `
 		UPDATE image_jobs
@@ -371,10 +439,12 @@ func (r *imageJobRepository) UpsertResult(ctx context.Context, jobID int64, atte
 	defer tx.Rollback()
 
 	var currentStatus string
+	var projectID sql.NullInt64
+	var ownerUserID int64
 	if err := tx.QueryRowContext(ctx, `
-		SELECT status FROM image_jobs
+		SELECT status, project_id, user_id FROM image_jobs
 		WHERE id = $1 AND attempt_id = $2 AND status = 'running'
-		FOR UPDATE`, jobID, attemptID).Scan(&currentStatus); errors.Is(err, sql.ErrNoRows) {
+		FOR UPDATE`, jobID, attemptID).Scan(&currentStatus, &projectID, &ownerUserID); errors.Is(err, sql.ErrNoRows) {
 		return false, service.ErrImageJobAttemptMismatch
 	} else if err != nil {
 		return false, fmt.Errorf("lock image job for result: %w", err)
@@ -417,6 +487,28 @@ func (r *imageJobRepository) UpsertResult(ctx context.Context, jobID int64, atte
 	}
 	if err != nil {
 		return false, fmt.Errorf("upsert image job result: %w", err)
+	}
+	if result.Status == "completed" && projectID.Valid && result.Width > 0 && result.Height > 0 && result.ByteSize > 0 && strings.TrimSpace(result.ObjectKey) != "" && strings.TrimSpace(result.SHA256) != "" {
+		var assetID int64
+		err := tx.QueryRowContext(ctx, `
+			INSERT INTO image_assets (
+				public_id, owner_user_id, project_id, source_type, object_key, mime_type,
+				width, height, byte_size, sha256, origin_job_id, parent_asset_ids
+			) VALUES ($1, $2, $3, 'generated', $4, $5, $6, $7, $8, $9, $10, '[]'::jsonb)
+			ON CONFLICT (object_key) DO UPDATE SET object_key = EXCLUDED.object_key
+			RETURNING id`,
+			newImageCanvasPublicID("asset"), ownerUserID, projectID.Int64, result.ObjectKey,
+			result.MIMEType, result.Width, result.Height, result.ByteSize, result.SHA256, jobID,
+		).Scan(&assetID)
+		if err != nil {
+			return false, fmt.Errorf("upsert generated image asset: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE image_job_results SET asset_id = $3 WHERE job_id = $1 AND index = $2`,
+			jobID, result.Index, assetID); err != nil {
+			return false, fmt.Errorf("link image job result asset: %w", err)
+		}
+		result.AssetID = &assetID
 	}
 	delta := 0
 	if previousStatus != "completed" && result.Status == "completed" {
@@ -772,6 +864,9 @@ func scanImageJob(scanner imageJobScanner) (*service.ImageJob, error) {
 	var errorType, errorCode, errorMessage sql.NullString
 	var jobErrorRetryable bool
 	var startedAt, finishedAt sql.NullTime
+	var projectID, policyVersion sql.NullInt64
+	var clientNodeID, selectedModel, successfulModel sql.NullString
+	var attemptPlanJSON, attemptLogJSON []byte
 	err := scanner.Scan(
 		&job.ID, &job.PublicID, &job.UserID, &job.APIKeyID, &job.GroupID,
 		&job.Endpoint, &job.Operation, &job.Mode,
@@ -784,6 +879,8 @@ func scanImageJob(scanner imageJobScanner) (*service.ImageJob, error) {
 		&heartbeatAt, &cancelRequestedAt, &canceledAt,
 		&errorType, &errorCode, &errorMessage, &jobErrorRetryable,
 		&startedAt, &finishedAt, &job.ExpiresAt, &job.CreatedAt, &job.UpdatedAt,
+		&projectID, &clientNodeID, &selectedModel, &policyVersion,
+		&attemptPlanJSON, &successfulModel, &attemptLogJSON,
 	)
 	if err != nil {
 		return nil, err
@@ -802,6 +899,23 @@ func scanImageJob(scanner imageJobScanner) (*service.ImageJob, error) {
 	job.CanceledAt = nullTimePointer(canceledAt)
 	job.StartedAt = nullTimePointer(startedAt)
 	job.FinishedAt = nullTimePointer(finishedAt)
+	job.ProjectID = nullInt64Pointer(projectID)
+	job.ClientNodeID = clientNodeID.String
+	job.SelectedModel = selectedModel.String
+	if policyVersion.Valid {
+		job.PolicyVersion = policyVersion.Int64
+	}
+	job.SuccessfulModel = successfulModel.String
+	if len(attemptPlanJSON) > 0 {
+		if err := json.Unmarshal(attemptPlanJSON, &job.AttemptPlan); err != nil {
+			return nil, fmt.Errorf("unmarshal image job attempt plan: %w", err)
+		}
+	}
+	if len(attemptLogJSON) > 0 {
+		if err := json.Unmarshal(attemptLogJSON, &job.AttemptLog); err != nil {
+			return nil, fmt.Errorf("unmarshal image job attempt log: %w", err)
+		}
+	}
 	job.Usage = append(json.RawMessage(nil), usageJSON...)
 	if errorType.Valid || errorCode.Valid || errorMessage.Valid {
 		job.Error = &service.ImageJobError{
@@ -836,10 +950,12 @@ func loadImageJobRelations(ctx context.Context, query imageJobQueryer, job *serv
 	}
 
 	resultRows, err := query.QueryContext(ctx, `
-		SELECT id, job_id, index, status, object_key, mime_type, byte_size,
-			width, height, size_tier, revised_prompt, upstream_output_id,
-			created_at, updated_at
-		FROM image_job_results WHERE job_id = $1 ORDER BY index`, job.ID)
+		SELECT r.id, r.job_id, r.index, r.status, r.object_key, r.mime_type, r.byte_size,
+			r.width, r.height, r.size_tier, r.revised_prompt, r.upstream_output_id,
+			r.asset_id, a.public_id, r.created_at, r.updated_at
+		FROM image_job_results r
+		LEFT JOIN image_assets a ON a.id = r.asset_id AND a.deleted_at IS NULL
+		WHERE r.job_id = $1 ORDER BY r.index`, job.ID)
 	if err != nil {
 		return fmt.Errorf("load image job results: %w", err)
 	}
@@ -849,10 +965,13 @@ func loadImageJobRelations(ctx context.Context, query imageJobQueryer, job *serv
 		var objectKey, mimeType, sizeTier, revisedPrompt, upstreamOutputID sql.NullString
 		var byteSize sql.NullInt64
 		var width, height sql.NullInt64
+		var assetID sql.NullInt64
+		var assetPublicID sql.NullString
 		if err := resultRows.Scan(
 			&result.ID, &result.JobID, &result.Index, &result.Status,
 			&objectKey, &mimeType, &byteSize, &width, &height, &sizeTier,
-			&revisedPrompt, &upstreamOutputID, &result.CreatedAt, &result.UpdatedAt,
+			&revisedPrompt, &upstreamOutputID, &assetID, &assetPublicID,
+			&result.CreatedAt, &result.UpdatedAt,
 		); err != nil {
 			return fmt.Errorf("scan image job result: %w", err)
 		}
@@ -864,6 +983,8 @@ func loadImageJobRelations(ctx context.Context, query imageJobQueryer, job *serv
 		result.SizeTier = sizeTier.String
 		result.RevisedPrompt = revisedPrompt.String
 		result.UpstreamOutputID = upstreamOutputID.String
+		result.AssetID = nullInt64Pointer(assetID)
+		result.AssetPublicID = assetPublicID.String
 		job.Results = append(job.Results, result)
 	}
 	if err := resultRows.Err(); err != nil {
@@ -899,6 +1020,7 @@ func prefixedImageJobColumns(prefix string) string {
 		"usage", "settlement_status", "attempt_id", "worker_id", "execution_phase",
 		"heartbeat_at", "cancel_requested_at", "canceled_at", "error_type", "error_code",
 		"error_message", "error_retryable", "started_at", "finished_at", "expires_at", "created_at", "updated_at",
+		"project_id", "client_node_id", "selected_model", "policy_version", "attempt_plan", "successful_model", "attempt_log",
 	}
 	for i := range columns {
 		columns[i] = prefix + "." + columns[i]

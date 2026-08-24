@@ -82,6 +82,11 @@ func imageJobCleanupObjectKeys(job *ImageJob) []string {
 		add(input.ObjectKey)
 	}
 	for _, result := range job.Results {
+		// Canvas results are promoted to permanent assets and share the same
+		// object key. Expiring job metadata must not delete the asset bytes.
+		if result.AssetID != nil || result.AssetPublicID != "" {
+			continue
+		}
 		add(result.ObjectKey)
 	}
 	return keys

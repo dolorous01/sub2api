@@ -44,7 +44,11 @@ export default defineConfig(({ mode }) => {
     plugins: [
       vue(),
       checker({
-        vueTsc: true
+        vueTsc: true,
+        // Production builds run the explicit `vue-tsc -b` check first.
+        // Starting a second checker worker here can keep Rollup alive after
+        // the build has finished, especially in constrained CI runners.
+        enableBuild: false
       }),
       injectPublicSettings(backendUrl)
     ],

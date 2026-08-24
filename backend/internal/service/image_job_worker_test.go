@@ -1,11 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"sort"
 	"strings"
 	"sync"
@@ -50,7 +53,7 @@ func TestJobImageResultSinkIgnoresDuplicateFinalProgress(t *testing.T) {
 }
 
 func TestJobImageResultSinkDoesNotDeleteObjectWhenMetadataWriteFails(t *testing.T) {
-	worker, deps := newImageJobWorkerFixture(t, 1)
+	_, deps := newImageJobWorkerFixture(t, 1)
 	deps.repo.failUpsert = true
 	sink := NewJobImageResultSink(deps.repo.job, "attempt", deps.repo, deps.store, nil)
 	artifact := ImageArtifact{Index: 0, Data: []byte("png"), MIMEType: "image/png"}
@@ -73,6 +76,33 @@ func TestJobImageResultSinkPreservesPreviouslyCommittedResult(t *testing.T) {
 	object, err := deps.store.Get(context.Background(), key)
 	require.NoError(t, err)
 	require.Equal(t, []byte("old-png"), object.Data)
+	require.Equal(t, 0, deps.repo.upsertCalls)
+}
+
+func TestImageJobWorkerCanvasResultDecodesDimensionsAndCreatesAsset(t *testing.T) {
+	worker, deps := newImageJobWorkerFixture(t, 1)
+	projectID := int64(42)
+	deps.repo.job.ProjectID = &projectID
+	deps.executor.outputData = workerTestPNG(t)
+
+	require.NoError(t, worker.runOnce(context.Background(), "worker-canvas-asset"))
+	require.Equal(t, ImageJobStatusCompleted, deps.repo.job.Status)
+	result := deps.repo.results[0]
+	require.NotNil(t, result)
+	require.Equal(t, 1, result.Width)
+	require.Equal(t, 1, result.Height)
+	require.NotNil(t, result.AssetID)
+}
+
+func TestJobImageResultSinkRejectsUndecodableCanvasResultBeforeObjectWrite(t *testing.T) {
+	_, deps := newImageJobWorkerFixture(t, 1)
+	projectID := int64(42)
+	deps.repo.job.ProjectID = &projectID
+	sink := NewJobImageResultSink(deps.repo.job, "attempt", deps.repo, deps.store, nil)
+
+	err := sink.Final(context.Background(), ImageArtifact{Index: 0, Data: []byte("not an image"), MIMEType: "image/png"})
+	require.Error(t, err)
+	require.Empty(t, deps.store.KeysWithPrefix("image-jobs/"))
 	require.Equal(t, 0, deps.repo.upsertCalls)
 }
 
@@ -299,6 +329,7 @@ type workerFakeImageExecutor struct {
 	inputs      []ImageExecutionInput
 	outputCount int
 	failCall    int
+	outputData  []byte
 }
 
 type imageExecutorFunc func(context.Context, ImageExecutionInput, ImageResultSink) (*ImageExecutionResult, error)
@@ -320,7 +351,11 @@ func (e *workerFakeImageExecutor) Execute(ctx context.Context, input ImageExecut
 		outputCount = input.Parsed.N
 	}
 	for index := 0; index < outputCount; index++ {
-		if err := sink.Final(ctx, ImageArtifact{Index: index, Data: []byte(fmt.Sprintf("png-%d", index)), MIMEType: "image/png", SizeTier: input.Parsed.SizeTier}); err != nil {
+		data := e.outputData
+		if len(data) == 0 {
+			data = []byte(fmt.Sprintf("png-%d", index))
+		}
+		if err := sink.Final(ctx, ImageArtifact{Index: index, Data: data, MIMEType: "image/png", SizeTier: input.Parsed.SizeTier}); err != nil {
 			return nil, err
 		}
 	}
@@ -510,6 +545,10 @@ func (r *workerMemoryImageJobRepository) UpsertResult(_ context.Context, _ int64
 	if r.job.AttemptID == nil || *r.job.AttemptID != attemptID {
 		return false, ErrImageJobAttemptMismatch
 	}
+	if r.job.ProjectID != nil && result.Status == "completed" && result.Width > 0 && result.Height > 0 && result.ByteSize > 0 && result.ObjectKey != "" && result.SHA256 != "" {
+		assetID := int64(1000 + result.Index)
+		result.AssetID = &assetID
+	}
 	_, exists := r.results[result.Index]
 	copyResult := *result
 	r.results[result.Index] = &copyResult
@@ -581,5 +620,12 @@ func (*workerMemoryImageJobRepository) MarkExpired(context.Context, int64, Image
 }
 
 func stringPointer(value string) *string { return &value }
+
+func workerTestPNG(t *testing.T) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	require.NoError(t, png.Encode(&buffer, image.NewRGBA(image.Rect(0, 0, 1, 1))))
+	return buffer.Bytes()
+}
 
 var _ ImageJobRepository = (*workerMemoryImageJobRepository)(nil)

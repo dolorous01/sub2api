@@ -56,6 +56,12 @@ declare module 'vue-router' {
     requiresRiskControl?: boolean
 
     /**
+     * Whether the Studio feature flag must be enabled
+     * @default false
+     */
+    requiresImageCanvas?: boolean
+
+    /**
      * i18n key for the page title
      */
     titleKey?: string

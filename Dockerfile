@@ -20,11 +20,16 @@ FROM ${NODE_IMAGE} AS frontend-builder
 
 WORKDIR /app/frontend
 
-# Install pnpm (pinned to v9 to match CI and keep builds reproducible)
-RUN corepack enable && corepack prepare pnpm@9 --activate
+ARG VITE_CANVAS_SOURCE_URL=https://github.com/dolorous01/sub2api
+ENV VITE_CANVAS_SOURCE_URL=${VITE_CANVAS_SOURCE_URL}
 
-# Install dependencies first (better caching)
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+# Match packageManager and CI so the workspace lockfile is resolved identically.
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
+
+# Install dependencies first (better caching). The canvas is a pnpm workspace
+# package, so its manifest must be present when the frozen lockfile is resolved.
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+COPY frontend/infinite-canvas/package.json ./infinite-canvas/package.json
 RUN pnpm install --frozen-lockfile
 
 # Copy frontend source and build.

@@ -187,3 +187,49 @@ func isS3ObjectNotFound(err error) bool {
 	var statusErr interface{ HTTPStatusCode() int }
 	return errors.As(err, &statusErr) && statusErr.HTTPStatusCode() == 404
 }
+
+func (s *s3ImageJobObjectStore) PutReader(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if reader == nil || size <= 0 || size > maxCanvasMediaObjectBytes {
+		return fmt.Errorf("canvas media object size is invalid")
+	}
+	objectKey, err := s.objectKey(key)
+	if err != nil {
+		return err
+	}
+	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(s.bucket),
+		Key:           aws.String(objectKey),
+		Body:          reader,
+		ContentLength: aws.Int64(size),
+		ContentType:   aws.String(contentType),
+	})
+	if err != nil {
+		return fmt.Errorf("put canvas media object: %w", err)
+	}
+	return nil
+}
+
+func (s *s3ImageJobObjectStore) Open(ctx context.Context, key string) (io.ReadCloser, string, int64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, "", 0, err
+	}
+	objectKey, err := s.objectKey(key)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	output, err := s.client.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(objectKey)})
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("open canvas media object: %w", err)
+	}
+	if output == nil || output.Body == nil || output.ContentLength == nil ||
+		*output.ContentLength < 0 || *output.ContentLength > maxCanvasMediaObjectBytes {
+		if output != nil && output.Body != nil {
+			_ = output.Body.Close()
+		}
+		return nil, "", 0, fmt.Errorf("canvas media object response is invalid")
+	}
+	return output.Body, aws.ToString(output.ContentType), *output.ContentLength, nil
+}

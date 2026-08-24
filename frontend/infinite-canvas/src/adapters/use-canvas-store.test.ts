@@ -1,0 +1,202 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  api: {
+    listProjects: vi.fn(),
+    getMediaTask: vi.fn(),
+    updateProject: vi.fn()
+  },
+  drafts: {
+    getItem: vi.fn(),
+    setItem: vi.fn(),
+    removeItem: vi.fn()
+  },
+  notify: vi.fn()
+}))
+
+vi.mock('localforage', () => ({
+  default: { createInstance: () => mocks.drafts }
+}))
+vi.mock('nanoid', () => ({ nanoid: () => 'generated-id' }))
+vi.mock('@sub2api/adapters/asset-runtime', () => ({ resolveStorageKeyAlias: (value: string) => value }))
+vi.mock('@sub2api/api/canvas-api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@sub2api/api/canvas-api')>()
+  return { ...actual, createCanvasAPI: () => mocks.api }
+})
+vi.mock('@sub2api/runtime/host-runtime', () => ({
+  getCanvasRuntimeHost: () => ({ notify: mocks.notify })
+}))
+
+import {
+  initializeCanvasProjectStore,
+  isCanvasRecoveryActive,
+  registerCanvasTaskRecovery,
+  resetCanvasProjectStore,
+  scheduleCanvasTaskRecoveryCleanup,
+  useCanvasStore
+} from './use-canvas-store'
+
+function serverProject(status: 'running' | 'completed') {
+  return {
+    id: 'project-1',
+    name: 'Recovery project',
+    version: 1,
+    created_at: '2026-08-24T00:00:00Z',
+    updated_at: '2026-08-24T00:00:01Z',
+    document: {
+      schema_version: 2 as const,
+      nodes: [
+        {
+          id: 'source', type: 'config', title: 'Source', position: { x: 0, y: 0 }, width: 320, height: 240,
+          metadata: { status: 'loading' }
+        },
+        {
+          id: 'target', type: 'video', title: 'Video', position: { x: 400, y: 0 }, width: 320, height: 240,
+          metadata: { status: 'loading' }
+        }
+      ],
+      connections: [{ id: 'edge', fromNodeId: 'source', toNodeId: 'target' }]
+    },
+    media_tasks: [{
+      id: 'task-1',
+      kind: 'video' as const,
+      status,
+      project_id: 'project-1',
+      client_node_id: 'source',
+      selected_model: 'grok-imagine-video',
+      results: status === 'completed'
+        ? [{ index: 0, asset_id: 'video-asset', mime_type: 'video/mp4' }]
+        : [],
+      created_at: 1
+    }]
+  }
+}
+
+describe('canvas project recovery store', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.drafts.getItem.mockResolvedValue(null)
+    mocks.drafts.setItem.mockResolvedValue(undefined)
+    mocks.drafts.removeItem.mockResolvedValue(undefined)
+    resetCanvasProjectStore()
+  })
+
+  afterEach(() => {
+    resetCanvasProjectStore()
+    vi.useRealTimers()
+  })
+
+  it('reconciles a completed task before exposing the hydrated project', async () => {
+    mocks.api.listProjects.mockResolvedValue([serverProject('completed')])
+
+    await initializeCanvasProjectStore()
+    const project = useCanvasStore.getState().openProject('project-1')
+
+    expect(project?.nodes[1].metadata).toMatchObject({
+      status: 'success',
+      storageKey: 'asset:video-asset'
+    })
+    expect(project?.nodes[0].metadata?.status).toBe('success')
+    expect(isCanvasRecoveryActive('target')).toBe(false)
+  })
+
+  it('keeps an active task recoverable and applies its terminal snapshot', async () => {
+    vi.useFakeTimers()
+    mocks.api.listProjects.mockResolvedValue([serverProject('running')])
+    mocks.api.getMediaTask.mockResolvedValue({
+      ...serverProject('completed').media_tasks[0],
+      status: 'completed'
+    })
+    mocks.api.updateProject.mockImplementation(async (_id, _version, _name, document) => ({
+      ...serverProject('completed'),
+      document,
+      version: 2
+    }))
+
+    await initializeCanvasProjectStore()
+    useCanvasStore.getState().openProject('project-1')
+    expect(isCanvasRecoveryActive('source')).toBe(true)
+    expect(isCanvasRecoveryActive('target')).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(1500)
+    await vi.advanceTimersByTimeAsync(0)
+
+    const project = useCanvasStore.getState().projects[0]
+    expect(project.nodes[1].metadata).toMatchObject({
+      status: 'success',
+      storageKey: 'asset:video-asset'
+    })
+    expect(project.recoveryRevision).toBe(1)
+    expect(isCanvasRecoveryActive('target')).toBe(false)
+  })
+
+  it('resumes a persisted task ID even when it is absent from the project listing snapshot', async () => {
+    vi.useFakeTimers()
+    const value = serverProject('running')
+    mocks.api.listProjects.mockResolvedValue([{
+      ...value,
+      document: {
+        ...value.document,
+        recoveries: [{
+          taskID: 'task-1',
+          kind: 'video',
+          sourceNodeID: 'source',
+          targetNodeID: 'target'
+        }]
+      },
+      media_tasks: []
+    }])
+    mocks.api.getMediaTask.mockResolvedValue(serverProject('completed').media_tasks[0])
+    mocks.api.updateProject.mockImplementation(async (_id, _version, _name, document) => ({
+      ...serverProject('completed'),
+      document,
+      version: 2
+    }))
+
+    await initializeCanvasProjectStore()
+    useCanvasStore.getState().openProject('project-1')
+    expect(isCanvasRecoveryActive('target')).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(1500)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(mocks.api.getMediaTask).toHaveBeenCalledWith('task-1', expect.any(AbortSignal))
+    expect(useCanvasStore.getState().projects[0].nodes[1].metadata?.storageKey).toBe('asset:video-asset')
+    expect(useCanvasStore.getState().projects[0].recoveries).toEqual([])
+  })
+
+  it('persists a new task-to-node binding until delayed cleanup', async () => {
+    vi.useFakeTimers()
+    const value = serverProject('running')
+    mocks.api.listProjects.mockResolvedValue([{ ...value, media_tasks: [] }])
+    mocks.api.updateProject.mockImplementation(async (_id, _version, _name, document) => ({
+      ...value,
+      document,
+      version: 2
+    }))
+    await initializeCanvasProjectStore()
+    useCanvasStore.getState().openProject('project-1')
+
+    registerCanvasTaskRecovery({
+      id: 'new-task',
+      kind: 'video',
+      status: 'queued',
+      project_id: 'project-1',
+      client_node_id: 'source',
+      selected_model: 'grok-imagine-video',
+      results: []
+    }, 'video')
+
+    expect(useCanvasStore.getState().projects[0].recoveries).toEqual([{
+      taskID: 'new-task',
+      kind: 'video',
+      sourceNodeID: 'source',
+      targetNodeID: 'target'
+    }])
+    scheduleCanvasTaskRecoveryCleanup('new-task', 100)
+    await vi.advanceTimersByTimeAsync(100)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(useCanvasStore.getState().projects[0].recoveries).toEqual([])
+  })
+})

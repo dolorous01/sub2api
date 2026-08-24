@@ -104,6 +104,11 @@ export const FeatureFlags = {
     mode: 'opt-in',
     label: 'Available Channels',
   }),
+  imageCanvas: defineFlag({
+    key: 'image_canvas_enabled',
+    mode: 'opt-in',
+    label: 'Image Canvas',
+  }),
   payment: defineFlag({
     key: 'payment_enabled',
     mode: 'opt-out',

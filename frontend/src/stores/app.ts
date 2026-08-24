@@ -318,6 +318,7 @@ export const useAppStore = defineStore('app', () => {
         return { ...cachedPublicSettings.value }
       }
       return {
+        image_canvas_enabled: false,
         registration_enabled: false,
         email_verify_enabled: false,
         force_email_on_third_party_signup: false,

@@ -14,6 +14,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
@@ -1397,17 +1398,383 @@ func (a *Account) SupportsOpenAIImageCapability(capability OpenAIImagesCapabilit
 	if capability == "" {
 		return true
 	}
-	if !a.IsOpenAI() {
+	if a == nil || (a.Platform != PlatformOpenAI && a.Platform != PlatformGrok) {
 		return false
 	}
 	switch capability {
 	case OpenAIImagesCapabilityBasic:
 		return a.Type == AccountTypeOAuth || a.Type == AccountTypeAPIKey
 	case OpenAIImagesCapabilityNative:
-		return a.Type == AccountTypeAPIKey
+		return a.Type == AccountTypeAPIKey || (a.Platform == PlatformGrok && a.Type == AccountTypeOAuth)
 	default:
 		return false
 	}
+}
+
+// ImageCanvasModelCatalog returns the canvas media models this account can
+// serve. Explicit declarations are read from image_model_capabilities or
+// canvas_model_capabilities. Known model names are inferred conservatively.
+func (a *Account) ImageCanvasModelCatalog(maxInputImages, maxOutputs int) map[string]ImageModelCapability {
+	if a == nil || (a.Platform != PlatformOpenAI && a.Platform != PlatformGrok) || !a.SupportsOpenAIImageCapability(OpenAIImagesCapabilityNative) {
+		return nil
+	}
+	if maxInputImages <= 0 {
+		maxInputImages = 4
+	}
+	if maxOutputs <= 0 {
+		maxOutputs = 4
+	}
+
+	declared := a.declaredImageCanvasCapabilities(maxInputImages, maxOutputs)
+	for model, capability := range declared {
+		if !imageCanvasMediaPlatformCompatible(capability.MediaKind, a.Platform) {
+			delete(declared, model)
+			continue
+		}
+		capability.Provider = a.Platform
+		declared[model] = capability
+	}
+	result := make(map[string]ImageModelCapability)
+	mapping := a.GetModelMapping()
+	if len(mapping) == 0 {
+		modelIDs := make([]string, 0)
+		if a.Platform == PlatformGrok {
+			modelIDs = xai.DefaultModelIDs()
+		} else {
+			for _, model := range openai.DefaultModels {
+				modelIDs = append(modelIDs, model.ID)
+			}
+		}
+		for _, modelID := range modelIDs {
+			if capability, ok := inferredImageCanvasCapability(modelID, maxInputImages, maxOutputs); ok {
+				if !imageCanvasMediaPlatformCompatible(capability.MediaKind, a.Platform) {
+					continue
+				}
+				capability.Provider = a.Platform
+				result[modelID] = capability
+			}
+		}
+	} else {
+		for requestedModel, upstreamModel := range mapping {
+			requestedModel = strings.TrimSpace(requestedModel)
+			upstreamModel = strings.TrimSpace(upstreamModel)
+			if requestedModel == "" {
+				continue
+			}
+			if capability, ok := declared[requestedModel]; ok {
+				result[requestedModel] = capability
+				continue
+			}
+			if capability, ok := declared[upstreamModel]; ok {
+				result[requestedModel] = capability
+				continue
+			}
+			if capability, ok := inferredImageCanvasCapability(requestedModel, maxInputImages, maxOutputs); ok {
+				if imageCanvasMediaPlatformCompatible(capability.MediaKind, a.Platform) {
+					capability.Provider = a.Platform
+					result[requestedModel] = capability
+					continue
+				}
+			}
+			if capability, ok := inferredImageCanvasCapability(upstreamModel, maxInputImages, maxOutputs); ok {
+				if !imageCanvasMediaPlatformCompatible(capability.MediaKind, a.Platform) {
+					continue
+				}
+				capability.Provider = a.Platform
+				result[requestedModel] = capability
+			}
+		}
+	}
+
+	// A declaration can add a custom model when the account has no explicit
+	// mapping, or refine a model already allowed by its mapping.
+	for model, capability := range declared {
+		if len(mapping) == 0 || a.IsModelSupported(model) {
+			result[model] = capability
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+func imageCanvasMediaPlatformCompatible(mediaKind, platform string) bool {
+	switch strings.ToLower(strings.TrimSpace(mediaKind)) {
+	case "video":
+		return platform == PlatformGrok
+	case "audio":
+		return platform == PlatformOpenAI
+	default:
+		return true
+	}
+}
+
+func (a *Account) declaredImageCanvasCapabilities(maxInputImages, maxOutputs int) map[string]ImageModelCapability {
+	if a == nil || a.Credentials == nil {
+		return nil
+	}
+	result := make(map[string]ImageModelCapability)
+	for _, key := range []string{"image_model_capabilities", "canvas_model_capabilities"} {
+		raw, ok := a.Credentials[key]
+		if !ok || raw == nil {
+			continue
+		}
+		encoded, err := json.Marshal(raw)
+		if err != nil {
+			continue
+		}
+		var decoded map[string]ImageModelCapability
+		if err := json.Unmarshal(encoded, &decoded); err != nil {
+			continue
+		}
+		for model, capability := range decoded {
+			model = strings.TrimSpace(model)
+			if model == "" || (!capability.Generation && !capability.Edit) {
+				continue
+			}
+			result[model] = normalizeImageCanvasCapability(capability, maxInputImages, maxOutputs)
+		}
+	}
+	return result
+}
+
+func inferredImageCanvasCapability(model string, maxInputImages, maxOutputs int) (ImageModelCapability, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(model))
+	if normalized == "" {
+		return ImageModelCapability{}, false
+	}
+	capability := ImageModelCapability{}
+	switch {
+	case normalized == "grok-imagine-video" || strings.HasPrefix(normalized, "grok-imagine-video-"):
+		capability = ImageModelCapability{
+			MediaKind:      "video",
+			Provider:       ImageProviderGrok,
+			Generation:     true,
+			MaxInputImages: 1,
+			MaxOutputs:     1,
+			AspectRatios:   []string{"16:9", "9:16", "1:1"},
+			Resolutions:    []string{"480p", "720p"},
+			VideoSeconds:   []int{6, 10},
+			Defaults:       ImageModelDefaults{AspectRatio: "16:9", Resolution: "720p"},
+		}
+	case normalized == "gpt-4o-mini-tts" || strings.HasPrefix(normalized, "gpt-4o-mini-tts-") ||
+		normalized == "tts-1" || normalized == "tts-1-hd":
+		capability = ImageModelCapability{
+			MediaKind:     "audio",
+			Provider:      ImageProviderOpenAI,
+			Generation:    true,
+			MaxOutputs:    1,
+			AudioVoices:   []string{"alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer", "verse"},
+			AudioFormats:  []string{"mp3", "opus", "aac", "wav"},
+			AudioSpeedMin: 0.25,
+			AudioSpeedMax: 4,
+		}
+	case normalized == "gpt-image-2":
+		capability = gptImage2CanvasCapability()
+	case strings.HasPrefix(normalized, "gpt-image-"):
+		capability = ImageModelCapability{
+			Provider:          ImageProviderOpenAI,
+			DimensionMode:     ImageDimensionModeSize,
+			Generation:        true,
+			Edit:              true,
+			MultiImage:        true,
+			Mask:              true,
+			Sizes:             []string{"auto", "1024x1024", "1536x1024", "1024x1536"},
+			Qualities:         []string{"auto", "low", "medium", "high"},
+			OutputFormats:     []string{"png", "jpeg", "webp"},
+			Backgrounds:       []string{"auto", "opaque", "transparent"},
+			OutputCompression: true,
+			Defaults:          ImageModelDefaults{Size: "auto", Quality: "auto", OutputFormat: "png", Background: "auto"},
+		}
+	case normalized == "grok-imagine-image-2.0":
+		capability = grokImage2CanvasCapability()
+	case normalized == "grok-imagine-image" || normalized == "grok-imagine-image-quality" || normalized == "grok-imagine":
+		capability = grokImageCanvasCapability(false)
+	case normalized == "grok-imagine-edit":
+		capability = grokImageCanvasCapability(false)
+		capability.Generation = false
+	case normalized == "dall-e-2":
+		capability = ImageModelCapability{
+			Provider:      ImageProviderOpenAI,
+			DimensionMode: ImageDimensionModeSize,
+			Generation:    true,
+			Edit:          true,
+			Mask:          true,
+			Sizes:         []string{"256x256", "512x512", "1024x1024"},
+			Defaults:      ImageModelDefaults{Size: "1024x1024"},
+		}
+	case normalized == "dall-e-3":
+		capability = ImageModelCapability{
+			Provider:      ImageProviderOpenAI,
+			DimensionMode: ImageDimensionModeSize,
+			Generation:    true,
+			Sizes:         []string{"1024x1024", "1792x1024", "1024x1792"},
+			Qualities:     []string{"standard", "hd"},
+			Defaults:      ImageModelDefaults{Size: "1024x1024", Quality: "standard"},
+		}
+		maxOutputs = 1
+	case strings.Contains(normalized, "image"),
+		strings.Contains(normalized, "flux"),
+		strings.Contains(normalized, "ideogram"),
+		strings.Contains(normalized, "recraft"),
+		strings.Contains(normalized, "stable-diffusion"),
+		strings.Contains(normalized, "sdxl"):
+		capability.Generation = true
+		capability.Edit = strings.Contains(normalized, "edit")
+	default:
+		return ImageModelCapability{}, false
+	}
+	return normalizeImageCanvasCapability(capability, maxInputImages, maxOutputs), true
+}
+
+func gptImage2CanvasCapability() ImageModelCapability {
+	jpegCompression := 90
+	return ImageModelCapability{
+		Provider:       ImageProviderOpenAI,
+		DimensionMode:  ImageDimensionModeSize,
+		Generation:     true,
+		Edit:           true,
+		MultiImage:     true,
+		Mask:           true,
+		MaxInputImages: 16,
+		Sizes: []string{
+			"auto", "1024x1024", "1536x1024", "1024x1536",
+			"2048x2048", "2048x1152", "1152x2048", "3840x2160", "2160x3840",
+		},
+		Qualities:         []string{"auto", "low", "medium", "high"},
+		OutputFormats:     []string{"png", "jpeg", "webp"},
+		Backgrounds:       []string{"auto", "opaque", "transparent"},
+		OutputCompression: true,
+		PartialImages:     true,
+		MaxPartialImages:  3,
+		CustomSize: &ImageCustomSizeConstraints{
+			MinPixels: 655360, MaxPixels: 8294400, MaxEdge: 3840, MultipleOf: 16, MaxAspectRatio: 3,
+		},
+		ExperimentalSizes: []string{"3840x2160", "2160x3840"},
+		Defaults: ImageModelDefaults{
+			Size: "1024x1024", Quality: "high", OutputFormat: "png", Background: "auto",
+		},
+		Presets: []ImageModelPreset{
+			{ID: "draft", Label: "Draft", Parameters: ImageModelDefaults{Size: "1024x1024", Quality: "low", OutputFormat: "jpeg", Background: "opaque", OutputCompression: &jpegCompression}},
+			{ID: "quality", Label: "High quality", Parameters: ImageModelDefaults{Size: "2048x2048", Quality: "high", OutputFormat: "png", Background: "auto"}},
+			{ID: "4k-landscape", Label: "4K landscape", Parameters: ImageModelDefaults{Size: "3840x2160", Quality: "high", OutputFormat: "png", Background: "auto"}, Experimental: true},
+			{ID: "4k-portrait", Label: "4K portrait", Parameters: ImageModelDefaults{Size: "2160x3840", Quality: "high", OutputFormat: "png", Background: "auto"}, Experimental: true},
+		},
+	}
+}
+
+func grokImage2CanvasCapability() ImageModelCapability {
+	capability := grokImageCanvasCapability(true)
+	capability.Qualities = []string{"low", "medium"}
+	capability.Defaults.Quality = "medium"
+	capability.Presets = []ImageModelPreset{
+		{ID: "draft", Label: "Draft", Parameters: ImageModelDefaults{AspectRatio: "auto", Resolution: "1k", Quality: "low"}},
+		{ID: "quality", Label: "High quality", Parameters: ImageModelDefaults{AspectRatio: "auto", Resolution: "2k", Quality: "medium"}},
+		{ID: "wide", Label: "Wide 2K", Parameters: ImageModelDefaults{AspectRatio: "16:9", Resolution: "2k", Quality: "medium"}},
+		{ID: "portrait", Label: "Portrait 2K", Parameters: ImageModelDefaults{AspectRatio: "9:16", Resolution: "2k", Quality: "medium"}},
+	}
+	return capability
+}
+
+func grokImageCanvasCapability(quality bool) ImageModelCapability {
+	capability := ImageModelCapability{
+		Provider:       ImageProviderGrok,
+		DimensionMode:  ImageDimensionModeAspectRatioResolution,
+		Generation:     true,
+		Edit:           true,
+		MultiImage:     true,
+		MaxInputImages: 3,
+		MaxOutputs:     10,
+		AspectRatios: []string{
+			"auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3",
+			"2:1", "1:2", "19.5:9", "9:19.5", "20:9", "9:20",
+		},
+		Resolutions: []string{"1k", "2k"},
+		Defaults:    ImageModelDefaults{AspectRatio: "auto", Resolution: "2k"},
+	}
+	if quality {
+		capability.Qualities = []string{"low", "medium"}
+		capability.Defaults.Quality = "medium"
+	}
+	return capability
+}
+
+func normalizeImageCanvasCapability(capability ImageModelCapability, maxInputImages, maxOutputs int) ImageModelCapability {
+	capability.MediaKind = strings.ToLower(strings.TrimSpace(capability.MediaKind))
+	if capability.MediaKind == "" {
+		capability.MediaKind = "image"
+	}
+	switch capability.MediaKind {
+	case "image", "video", "audio", "text":
+	default:
+		capability.MediaKind = "image"
+	}
+	if maxInputImages < 1 {
+		maxInputImages = 1
+	}
+	if maxOutputs < 1 {
+		maxOutputs = 1
+	}
+	if capability.MaxInputImages <= 0 || capability.MaxInputImages > maxInputImages {
+		capability.MaxInputImages = maxInputImages
+	}
+	if capability.MaxOutputs <= 0 || capability.MaxOutputs > maxOutputs {
+		capability.MaxOutputs = maxOutputs
+	}
+	if capability.MediaKind == "image" && !capability.Edit {
+		capability.MultiImage = false
+		capability.Mask = false
+		capability.MaxInputImages = 0
+	} else if capability.MediaKind != "image" {
+		capability.MultiImage = false
+		capability.Mask = false
+	}
+	if capability.DimensionMode == "" {
+		switch {
+		case len(capability.AspectRatios) > 0 || len(capability.Resolutions) > 0:
+			capability.DimensionMode = ImageDimensionModeAspectRatioResolution
+		case len(capability.Sizes) > 0 || capability.CustomSize != nil:
+			capability.DimensionMode = ImageDimensionModeSize
+		}
+	}
+	capability.Sizes = normalizeImageCanvasStrings(capability.Sizes)
+	capability.AspectRatios = normalizeImageCanvasStrings(capability.AspectRatios)
+	capability.Resolutions = normalizeImageCanvasStrings(capability.Resolutions)
+	capability.Qualities = normalizeImageCanvasStrings(capability.Qualities)
+	capability.OutputFormats = normalizeImageCanvasStrings(capability.OutputFormats)
+	capability.Backgrounds = normalizeImageCanvasStrings(capability.Backgrounds)
+	capability.ExperimentalSizes = normalizeImageCanvasStrings(capability.ExperimentalSizes)
+	capability.AudioVoices = normalizeImageCanvasStrings(capability.AudioVoices)
+	capability.AudioFormats = normalizeImageCanvasStrings(capability.AudioFormats)
+	if capability.MediaKind == "audio" && (capability.AudioSpeedMin <= 0 || capability.AudioSpeedMax < capability.AudioSpeedMin) {
+		capability.AudioSpeedMin, capability.AudioSpeedMax = 0.25, 4
+	}
+	return capability
+}
+
+func normalizeImageCanvasSizes(sizes []string) []string {
+	return normalizeImageCanvasStrings(sizes)
+}
+
+func normalizeImageCanvasStrings(sizes []string) []string {
+	if len(sizes) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(sizes))
+	result := make([]string, 0, len(sizes))
+	for _, size := range sizes {
+		size = strings.TrimSpace(size)
+		if size == "" {
+			continue
+		}
+		if _, exists := seen[size]; exists {
+			continue
+		}
+		seen[size] = struct{}{}
+		result = append(result, size)
+	}
+	return result
 }
 
 func (a *Account) GetChatGPTUserID() string {

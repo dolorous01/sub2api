@@ -47,6 +47,10 @@ type GrokMediaRequestInfo struct {
 	Prompt         string
 	N              int
 	Size           string
+	AspectRatio    string
+	Resolution     string
+	Quality        string
+	ResponseFormat string
 	SizeTier       string
 	InputImageURLs []string
 	MaskImageURL   string
@@ -113,7 +117,14 @@ func ParseGrokMediaRequest(contentType string, body []byte) GrokMediaRequestInfo
 	info.Model = strings.TrimSpace(info.Model)
 	info.Prompt = strings.TrimSpace(info.Prompt)
 	info.Size = strings.TrimSpace(info.Size)
+	info.AspectRatio = strings.TrimSpace(info.AspectRatio)
+	info.Resolution = strings.ToLower(strings.TrimSpace(info.Resolution))
+	info.Quality = strings.ToLower(strings.TrimSpace(info.Quality))
+	info.ResponseFormat = strings.ToLower(strings.TrimSpace(info.ResponseFormat))
 	info.SizeTier = NormalizeImageBillingTierOrDefault(info.Size)
+	if info.Resolution != "" {
+		info.SizeTier = NormalizeImageBillingTierOrDefault(info.Resolution)
+	}
 	if info.N <= 0 {
 		info.N = 1
 	}
@@ -127,6 +138,10 @@ func parseGrokMediaJSONRequest(body []byte, info *GrokMediaRequestInfo) {
 	info.Model = strings.TrimSpace(gjson.GetBytes(body, "model").String())
 	info.Prompt = strings.TrimSpace(gjson.GetBytes(body, "prompt").String())
 	info.Size = strings.TrimSpace(gjson.GetBytes(body, "size").String())
+	info.AspectRatio = strings.TrimSpace(gjson.GetBytes(body, "aspect_ratio").String())
+	info.Resolution = strings.TrimSpace(gjson.GetBytes(body, "resolution").String())
+	info.Quality = strings.TrimSpace(gjson.GetBytes(body, "quality").String())
+	info.ResponseFormat = strings.TrimSpace(gjson.GetBytes(body, "response_format").String())
 	if n := gjson.GetBytes(body, "n"); n.Exists() && n.Type == gjson.Number {
 		info.N = int(n.Int())
 	}
@@ -226,6 +241,14 @@ func parseGrokMediaMultipartRequest(contentType string, body []byte, info *GrokM
 			info.Prompt = value
 		case "size":
 			info.Size = value
+		case "aspect_ratio":
+			info.AspectRatio = value
+		case "resolution":
+			info.Resolution = value
+		case "quality":
+			info.Quality = value
+		case "response_format":
+			info.ResponseFormat = value
 		case "n":
 			if n, err := strconv.Atoi(value); err == nil {
 				info.N = n
@@ -388,6 +411,18 @@ func prepareGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, conten
 	}
 	if info.Size != "" {
 		payload["size"] = info.Size
+	}
+	if info.AspectRatio != "" {
+		payload["aspect_ratio"] = info.AspectRatio
+	}
+	if info.Resolution != "" {
+		payload["resolution"] = info.Resolution
+	}
+	if info.Quality != "" {
+		payload["quality"] = info.Quality
+	}
+	if info.ResponseFormat != "" {
+		payload["response_format"] = info.ResponseFormat
 	}
 
 	images := make([]map[string]string, 0, len(info.InputImageURLs)+len(info.Uploads))

@@ -109,6 +109,23 @@ func RegisterAdminRoutes(
 
 		// 异步图片任务运维
 		registerImageJobRoutes(admin, h)
+
+		// 图片画布模型策略（不受用户功能开关限制）
+		registerImageCanvasRoutes(admin, h)
+	}
+}
+
+func registerImageCanvasRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	if h == nil || h.Admin == nil || h.Admin.ImageCanvas == nil {
+		return
+	}
+	canvas := admin.Group("/image-canvas")
+	{
+		canvas.GET("/model-policy", h.Admin.ImageCanvas.GetPolicy)
+		canvas.PUT("/model-policy", h.Admin.ImageCanvas.UpdatePolicy)
+		canvas.GET("/model-policy/audit", h.Admin.ImageCanvas.ListAudit)
+		canvas.GET("/runtime", h.Admin.ImageCanvas.GetRuntimeSettings)
+		canvas.PUT("/runtime", h.Admin.ImageCanvas.UpdateRuntimeSettings)
 	}
 }
 

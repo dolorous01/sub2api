@@ -252,6 +252,9 @@ type SystemSettings struct {
 	// Available Channels feature switch (user-facing aggregate view)
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
 
+	// Image Canvas feature switch
+	ImageCanvasEnabled bool `json:"image_canvas_enabled"`
+
 	// 风控中心功能开关
 	RiskControlEnabled bool `json:"risk_control_enabled"`
 
@@ -334,6 +337,8 @@ type PublicSettings struct {
 	ChannelMonitorDefaultIntervalSeconds int  `json:"channel_monitor_default_interval_seconds"`
 
 	AvailableChannelsEnabled bool `json:"available_channels_enabled"`
+
+	ImageCanvasEnabled bool `json:"image_canvas_enabled"`
 
 	AffiliateEnabled bool `json:"affiliate_enabled"`
 

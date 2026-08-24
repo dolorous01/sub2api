@@ -13,6 +13,7 @@ import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
+import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 
 /**
  * Route definitions with lazy loading
@@ -263,6 +264,28 @@ const routes: RouteRecordRaw[] = [
       title: 'Profile',
       titleKey: 'profile.title',
       descriptionKey: 'profile.description'
+    }
+  },
+  {
+    path: '/studio',
+    name: 'Studio',
+    component: () => import('@/views/user/ImageCanvasView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresImageCanvas: true,
+      title: 'Studio',
+      titleKey: 'nav.imageCanvas',
+      descriptionKey: 'studio.description'
+    }
+  },
+  {
+    path: '/images',
+    redirect: '/studio',
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresImageCanvas: true
     }
   },
   {
@@ -550,6 +573,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/images',
+    name: 'AdminImageCanvas',
+    component: () => import('@/views/admin/ImageCanvasAdminView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Image Canvas',
+      titleKey: 'admin.imageCanvas.title',
+      descriptionKey: 'admin.imageCanvas.description'
+    }
+  },
+  {
     path: '/admin/risk-control',
     name: 'AdminRiskControl',
     component: () => import('@/views/admin/RiskControlView.vue'),
@@ -828,6 +863,11 @@ router.beforeEach(async (to, _from, next) => {
       next(authStore.isAdmin ? '/admin/settings' : '/dashboard')
       return
     }
+  }
+
+  if (to.meta.requiresImageCanvas && !isFeatureFlagEnabled(FeatureFlags.imageCanvas)) {
+    next(authStore.isAdmin ? '/admin/settings' : '/dashboard')
+    return
   }
 
   // 简易模式下限制访问某些页面

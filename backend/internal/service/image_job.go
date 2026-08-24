@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 )
 
@@ -22,6 +23,7 @@ var (
 	ErrImageJobPermissionDenied        = errors.New("image generation is not enabled for this group")
 	ErrImageJobInvalidRequest          = errors.New("invalid image job request")
 	ErrImageJobExpired                 = errors.New("image job results have expired")
+	ErrImageJobQueueFull               = errors.New("image job user queue is full")
 )
 
 type ImageJobStatus string
@@ -107,10 +109,13 @@ type ImageJobError struct {
 
 type ImageJobRequest struct {
 	Endpoint          string             `json:"endpoint"`
+	Provider          string             `json:"provider,omitempty"`
 	Model             string             `json:"model"`
 	Prompt            string             `json:"prompt"`
 	N                 int                `json:"n"`
 	Size              string             `json:"size,omitempty"`
+	AspectRatio       string             `json:"aspect_ratio,omitempty"`
+	Resolution        string             `json:"resolution,omitempty"`
 	ResponseFormat    string             `json:"response_format,omitempty"`
 	Quality           string             `json:"quality,omitempty"`
 	Background        string             `json:"background,omitempty"`
@@ -150,6 +155,14 @@ type ImageJobObjectStore interface {
 	Health(ctx context.Context) error
 }
 
+// ImageJobStreamingObjectStore is an optional extension used by canvas media.
+// Image jobs keep their bounded byte-slice API, while large video assets avoid
+// allocating the entire object in the server process.
+type ImageJobStreamingObjectStore interface {
+	PutReader(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error
+	Open(ctx context.Context, key string) (io.ReadCloser, string, int64, error)
+}
+
 type ImageJobInput struct {
 	ID        int64
 	JobID     int64
@@ -170,13 +183,33 @@ type ImageJobResult struct {
 	ObjectKey        string
 	MIMEType         string
 	ByteSize         int64
+	SHA256           string
 	Width            int
 	Height           int
 	SizeTier         string
 	RevisedPrompt    string
 	UpstreamOutputID string
+	AssetID          *int64
+	AssetPublicID    string
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+}
+
+type ImageJobAttempt struct {
+	Model      string    `json:"model"`
+	Position   int       `json:"position"`
+	StartedAt  time.Time `json:"started_at"`
+	LatencyMS  int64     `json:"latency_ms"`
+	ErrorClass string    `json:"error_class,omitempty"`
+	FinalCount int       `json:"final_count"`
+}
+
+type ImageCanvasJobMetadata struct {
+	ProjectID     *int64
+	ClientNodeID  string
+	SelectedModel string
+	PolicyVersion int64
+	AttemptPlan   []string
 }
 
 type ImageJob struct {
@@ -216,6 +249,13 @@ type ImageJob struct {
 	Error                     *ImageJobError
 	Inputs                    []ImageJobInput
 	Results                   []ImageJobResult
+	ProjectID                 *int64
+	ClientNodeID              string
+	SelectedModel             string
+	PolicyVersion             int64
+	AttemptPlan               []string
+	SuccessfulModel           string
+	AttemptLog                []ImageJobAttempt
 }
 
 type ImageJobCreate struct {
@@ -236,7 +276,9 @@ type ImageJobCreate struct {
 	ReservationBillingType    int8
 	ReservationSubscriptionID *int64
 	ExpiresAt                 time.Time
+	MaxActiveJobsPerUser      int
 	Inputs                    []ImageJobInput
+	Canvas                    *ImageCanvasJobMetadata
 }
 
 type ImageJobClaim struct {
@@ -273,4 +315,9 @@ type ImageJobRepository interface {
 	RecoverStale(ctx context.Context, cutoff time.Time) (requeued, indeterminate int64, err error)
 	ListExpired(ctx context.Context, now time.Time, limit int) ([]*ImageJob, error)
 	MarkExpired(ctx context.Context, jobID int64, fromStatus ImageJobStatus, expiredAt time.Time) error
+}
+
+type ImageJobCanvasAttemptRepository interface {
+	SetExecutionPhase(ctx context.Context, jobID int64, attemptID, phase string) error
+	RecordImageModelAttempt(ctx context.Context, jobID int64, attemptID string, attempt ImageJobAttempt, successfulModel string) error
 }

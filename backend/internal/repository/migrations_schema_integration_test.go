@@ -139,6 +139,53 @@ func TestMigrationsCreateImageJobTables(t *testing.T) {
 	requireIndex(t, tx, "image_job_results", "idx_image_job_results_job_index")
 }
 
+func TestMigrationsCreateImageCanvasSchema(t *testing.T) {
+	tx := testTx(t)
+
+	for _, table := range []string{
+		"image_model_policies",
+		"image_model_policy_items",
+		"image_model_policy_audits",
+		"image_canvas_projects",
+		"image_assets",
+		"image_canvas_asset_references",
+		"canvas_media_tasks",
+	} {
+		var got string
+		require.NoError(t, tx.QueryRow(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name=$1`, table).Scan(&got))
+		require.Equal(t, table, got)
+	}
+
+	for _, column := range []string{
+		"project_id",
+		"client_node_id",
+		"selected_model",
+		"policy_version",
+		"attempt_plan",
+		"successful_model",
+		"attempt_log",
+	} {
+		var got string
+		require.NoError(t, tx.QueryRow(`SELECT column_name FROM information_schema.columns WHERE table_name='image_jobs' AND column_name=$1`, column).Scan(&got))
+		require.Equal(t, column, got)
+	}
+
+	requireColumn(t, tx, "image_job_results", "asset_id", "bigint", 0, true)
+	requireColumn(t, tx, "image_assets", "media_kind", "character varying", 16, false)
+	requireColumn(t, tx, "image_assets", "duration_ms", "bigint", 0, false)
+	requireColumn(t, tx, "image_assets", "file_name", "character varying", 255, false)
+	requireColumn(t, tx, "canvas_media_tasks", "kind", "character varying", 16, false)
+	requireColumn(t, tx, "canvas_media_tasks", "request", "jsonb", 0, false)
+	requireColumn(t, tx, "canvas_media_tasks", "result_asset_id", "bigint", 0, true)
+	requireIndex(t, tx, "image_canvas_projects", "idx_image_canvas_projects_user_updated")
+	requireIndex(t, tx, "image_assets", "idx_image_assets_owner_project")
+	requireIndex(t, tx, "image_assets", "idx_image_assets_owner_kind_created")
+	requireIndex(t, tx, "image_canvas_asset_references", "idx_image_canvas_asset_references_asset")
+	requireIndex(t, tx, "image_jobs", "idx_image_jobs_project_created")
+	requireIndex(t, tx, "canvas_media_tasks", "idx_canvas_media_tasks_claim")
+	requireIndex(t, tx, "canvas_media_tasks", "idx_canvas_media_tasks_user_project")
+}
+
 func TestMigrationsRunner_AuthIdentityAndPaymentSchemaStayAligned(t *testing.T) {
 	tx := testTx(t)
 

@@ -66,15 +66,18 @@ func prepareImageJobRequest(
 	}
 
 	inputFidelity := parsed.InputFidelity
-	if normalizeOpenAIImagesEndpointPath(parsed.Endpoint) == openAIImagesEditsEndpoint && strings.TrimSpace(inputFidelity) == "" {
+	if normalizeImageProvider(parsed.Provider, parsed.Model) == ImageProviderOpenAI && normalizeOpenAIImagesEndpointPath(parsed.Endpoint) == openAIImagesEditsEndpoint && strings.TrimSpace(inputFidelity) == "" {
 		inputFidelity = "high"
 	}
 	normalized := ImageJobRequest{
 		Endpoint:          parsed.Endpoint,
+		Provider:          normalizeImageProvider(parsed.Provider, parsed.Model),
 		Model:             parsed.Model,
 		Prompt:            parsed.Prompt,
 		N:                 parsed.N,
 		Size:              parsed.Size,
+		AspectRatio:       parsed.AspectRatio,
+		Resolution:        parsed.Resolution,
 		ResponseFormat:    parsed.ResponseFormat,
 		Quality:           parsed.Quality,
 		Background:        parsed.Background,

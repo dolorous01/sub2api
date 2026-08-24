@@ -102,6 +102,7 @@ const (
 	imageExecutorUserWaitTimeout = 30 * time.Second
 	imageExecutorWaitBackoff     = 100 * time.Millisecond
 	imageExecutorMaxBackoff      = 2 * time.Second
+	sameAccountRetryDelay        = 100 * time.Millisecond
 )
 
 type imageExecutorAccountSelector func(
@@ -189,6 +190,7 @@ func (e *OpenAIImageExecutor) Execute(ctx context.Context, input ImageExecutionI
 			strings.TrimSpace(firstNonEmptyString(input.ChannelMapping.MappedModel, input.Parsed.Model)),
 			excluded,
 			input.Parsed.RequiredCapability,
+			input.Parsed.Provider,
 		)
 		if selectErr != nil || selection == nil || selection.Account == nil {
 			if lastForwardErr != nil {
@@ -326,11 +328,12 @@ func (e *OpenAIImageExecutor) selectImageAccount(
 	requestedModel string,
 	excludedIDs map[int64]struct{},
 	requiredCapability OpenAIImagesCapability,
+	provider string,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
 	if e.selectAccount != nil {
 		return e.selectAccount(ctx, groupID, sessionHash, requestedModel, excludedIDs, requiredCapability)
 	}
-	return e.gateway.SelectAccountWithSchedulerForImages(ctx, groupID, sessionHash, requestedModel, excludedIDs, requiredCapability)
+	return e.gateway.SelectAccountWithSchedulerForImages(ctx, groupID, sessionHash, requestedModel, excludedIDs, requiredCapability, normalizeImageProvider(provider, requestedModel))
 }
 
 func (e *OpenAIImageExecutor) forwardImageAccount(ctx context.Context, input ImageExecutionInput, account *Account, sink ImageResultSink) (*OpenAIForwardResult, error) {
@@ -347,6 +350,9 @@ func (e *OpenAIImageExecutor) forwardAccount(ctx context.Context, input ImageExe
 	}
 	if account == nil || input.Parsed == nil {
 		return nil, fmt.Errorf("image account and request are required")
+	}
+	if account.Platform == PlatformGrok {
+		return e.forwardGrokAccount(ctx, input, account, body, sink)
 	}
 	if account.Type == AccountTypeOAuth {
 		return e.forwardOAuthAccount(ctx, input, account, sink)
@@ -404,6 +410,86 @@ func (e *OpenAIImageExecutor) forwardAPIKeyAccount(ctx context.Context, input Im
 	result, err := e.gateway.consumeOpenAIImagesResponse(upstreamCtx, resp, parsed, sink)
 	if result != nil {
 		result.Model = requestModel
+		result.UpstreamModel = upstreamModel
+		result.UpstreamLatencyMs = upstreamLatencyMs
+	}
+	return result, err
+}
+
+func (e *OpenAIImageExecutor) forwardGrokAccount(ctx context.Context, input ImageExecutionInput, account *Account, body []byte, sink ImageResultSink) (*OpenAIForwardResult, error) {
+	parsed := input.Parsed
+	requestModel := strings.TrimSpace(firstNonEmptyString(input.ChannelMapping.MappedModel, parsed.Model))
+	upstreamModel := account.GetMappedModel(requestModel)
+	forwardBody, contentType, err := rewriteOpenAIImagesModel(body, parsed.ContentType, upstreamModel)
+	if err != nil {
+		return nil, err
+	}
+	endpoint := GrokMediaEndpointImagesGenerations
+	if parsed.Endpoint == openAIImagesEditsEndpoint {
+		endpoint = GrokMediaEndpointImagesEdits
+	}
+	forwardBody, contentType, err = prepareGrokMediaForwardBody(endpoint, forwardBody, contentType)
+	if err != nil {
+		return nil, err
+	}
+	forwardBody, contentType, err = normalizeGrokMediaForwardBody(endpoint, forwardBody, contentType)
+	if err != nil {
+		return nil, err
+	}
+
+	upstreamCtx, releaseUpstreamCtx := imageExecutorUpstreamContext(ctx, parsed, account, sink)
+	defer releaseUpstreamCtx()
+	token, _, err := e.gateway.GetAccessToken(upstreamCtx, account)
+	if err != nil {
+		return nil, err
+	}
+	targetURL, err := endpoint.upstreamURL(account.GetGrokBaseURL(), "")
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(upstreamCtx, http.MethodPost, targetURL, bytes.NewReader(forwardBody))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "sub2api-grok/1.0")
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "application/json"
+	}
+	req.Header.Set("Content-Type", contentType)
+	proxyURL := ""
+	if account.ProxyID != nil && account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
+	}
+	upstreamStart := time.Now()
+	resp, err := e.gateway.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
+	upstreamLatencyMs := time.Since(upstreamStart).Milliseconds()
+	if err != nil {
+		return nil, fmt.Errorf("upstream request failed: %s", sanitizeImageExecutionMessage(err.Error()))
+	}
+	if resp == nil {
+		return nil, fmt.Errorf("upstream returned an empty response")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		responseBody, _ := io.ReadAll(io.LimitReader(resp.Body, openAIUpstreamErrorBodyReadLimitForConfig(e.cfg)))
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 || e.gateway.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, sanitizeUpstreamErrorMessage(extractUpstreamErrorMessage(responseBody)), responseBody) {
+			return nil, &UpstreamFailoverError{
+				StatusCode: resp.StatusCode, ResponseBody: responseBody, ResponseHeaders: resp.Header.Clone(),
+				RetryableOnSameAccount: account.IsPoolMode() && account.IsPoolModeRetryableStatus(resp.StatusCode),
+			}
+		}
+		if !account.ShouldHandleErrorCode(resp.StatusCode) {
+			return nil, newImageExecutionError(http.StatusInternalServerError, "upstream_error", "upstream_gateway_error", "Upstream gateway error", false, false, nil)
+		}
+		return nil, openAIImagesUpstreamErrorFromHTTP(resp.StatusCode, resp.Header, responseBody)
+	}
+	applyImageResponseHeaders(sink, resp.Header, e.gateway.responseHeaderFilter)
+	result, err := e.gateway.consumeOpenAIImagesResponse(upstreamCtx, resp, parsed, sink)
+	if result != nil {
+		result.Model = requestModel
+		result.BillingModel = requestModel
 		result.UpstreamModel = upstreamModel
 		result.UpstreamLatencyMs = upstreamLatencyMs
 	}

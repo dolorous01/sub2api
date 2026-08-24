@@ -97,6 +97,7 @@ func provideCleanup(
 	grokOAuth *service.GrokOAuthService,
 	openAIGateway *service.OpenAIGatewayService,
 	imageJobs *service.ImageJobService,
+	canvasMedia *service.CanvasMediaService,
 	scheduledTestRunner *service.ScheduledTestRunnerService,
 	backupSvc *service.BackupService,
 	paymentOrderExpiry *service.PaymentOrderExpiryService,
@@ -114,6 +115,12 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
+			{"CanvasMediaService", func() error {
+				if canvasMedia != nil {
+					canvasMedia.Stop()
+				}
+				return nil
+			}},
 			{"ImageJobService", func() error {
 				if imageJobs != nil {
 					imageJobs.Stop()

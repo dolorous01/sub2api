@@ -24,17 +24,31 @@ var monitorBlockedHostnames = map[string]struct{}{
 // CIDR 列表：包含所有需要拒绝的 IPv4/IPv6 段。
 // 解析时只 panic 一次（启动时确认），生产路径只做 Contains。
 var monitorBlockedCIDRs = mustParseCIDRs([]string{
-	"127.0.0.0/8",    // IPv4 loopback
-	"10.0.0.0/8",     // RFC1918
-	"172.16.0.0/12",  // RFC1918
-	"192.168.0.0/16", // RFC1918
-	"169.254.0.0/16", // link-local（含云元数据 169.254.169.254）
-	"100.64.0.0/10",  // CGNAT
-	"0.0.0.0/8",      // "this network"
-	"::1/128",        // IPv6 loopback
-	"fc00::/7",       // IPv6 ULA
-	"fe80::/10",      // IPv6 link-local
-	"::/128",         // IPv6 unspecified
+	"127.0.0.0/8",     // IPv4 loopback
+	"10.0.0.0/8",      // RFC1918
+	"172.16.0.0/12",   // RFC1918
+	"192.168.0.0/16",  // RFC1918
+	"169.254.0.0/16",  // link-local（含云元数据 169.254.169.254）
+	"100.64.0.0/10",   // CGNAT
+	"0.0.0.0/8",       // "this network"
+	"192.0.0.0/24",    // IETF protocol assignments
+	"192.0.2.0/24",    // TEST-NET-1
+	"192.88.99.0/24",  // deprecated 6to4 relay anycast
+	"198.18.0.0/15",   // benchmarking
+	"198.51.100.0/24", // TEST-NET-2
+	"203.0.113.0/24",  // TEST-NET-3
+	"240.0.0.0/4",     // reserved
+	"::1/128",         // IPv6 loopback
+	"64:ff9b::/96",    // IPv4/IPv6 translation
+	"64:ff9b:1::/48",  // local-use IPv4/IPv6 translation
+	"100::/64",        // discard-only
+	"2001::/23",       // IETF protocol assignments
+	"2001:db8::/32",   // documentation
+	"2002::/16",       // 6to4
+	"3fff::/20",       // documentation
+	"fc00::/7",        // IPv6 ULA
+	"fe80::/10",       // IPv6 link-local
+	"::/128",          // IPv6 unspecified
 })
 
 // monitorDialer 共享 Dialer，与 net/http 默认值对齐。

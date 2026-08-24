@@ -40,6 +40,22 @@ func TestImageJobCleanupKeepsStateWhenDeleteFails(t *testing.T) {
 	require.Equal(t, 0, repo.markCalls)
 }
 
+func TestImageJobCleanupPreservesPromotedCanvasAssetObject(t *testing.T) {
+	assetID := int64(91)
+	job := &ImageJob{
+		Inputs: []ImageJobInput{{ObjectKey: "image-jobs/9/input.png"}},
+		Results: []ImageJobResult{
+			{ObjectKey: "image-jobs/9/results/0.png", AssetID: &assetID, AssetPublicID: "asset_91"},
+			{ObjectKey: "image-jobs/9/results/1.png"},
+		},
+	}
+
+	require.ElementsMatch(t, []string{
+		"image-jobs/9/input.png",
+		"image-jobs/9/results/1.png",
+	}, imageJobCleanupObjectKeys(job))
+}
+
 type cleanupMemoryImageJobRepository struct {
 	*workerMemoryImageJobRepository
 	jobs      []*ImageJob

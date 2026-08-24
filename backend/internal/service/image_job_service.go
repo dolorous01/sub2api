@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -16,14 +17,16 @@ import (
 )
 
 type CreateImageJobInput struct {
-	APIKey         *APIKey
-	Subscription   *UserSubscription
-	Parsed         *OpenAIImagesRequest
-	Scenes         []string
-	Mode           string
-	IdempotencyKey string
-	MappedModel    string
-	ChannelMapping ChannelMappingResult
+	APIKey          *APIKey
+	Subscription    *UserSubscription
+	Parsed          *OpenAIImagesRequest
+	Scenes          []string
+	Mode            string
+	IdempotencyKey  string
+	MappedModel     string
+	ChannelMapping  ChannelMappingResult
+	CandidateModels []string
+	Canvas          *ImageCanvasJobMetadata
 	ChannelUsageFields
 }
 
@@ -63,6 +66,7 @@ type ImageJobService struct {
 	cfg           *config.Config
 	metrics       *ImageJobMetrics
 	worker        *ImageJobWorker
+	runtime       *ImageJobRuntimeSettingsService
 }
 
 func NewImageJobService(
@@ -85,13 +89,15 @@ func NewImageJobService(
 			service.cfg = value
 		case *ImageJobMetrics:
 			service.metrics = value
+		case *ImageJobRuntimeSettingsService:
+			service.runtime = value
 		}
 	}
 	if service.metrics == nil {
 		service.metrics = &ImageJobMetrics{}
 	}
 	if service.executor != nil && service.apiKeys != nil && service.billing != nil && service.cfg != nil {
-		service.worker = NewImageJobWorker(repo, store, service.executor, service.apiKeys, service.subscriptions, service.billing, service.cfg, service.metrics)
+		service.worker = NewImageJobWorker(repo, store, service.executor, service.apiKeys, service.subscriptions, service.billing, service.cfg, service.metrics, service.runtime)
 	}
 	return service
 }
@@ -113,6 +119,13 @@ func (s *ImageJobService) MetricsSnapshot() ImageJobMetricsSnapshot {
 		return ImageJobMetricsSnapshot{}
 	}
 	return s.metrics.Snapshot()
+}
+
+func (s *ImageJobService) WorkerSnapshot() ImageJobWorkerSnapshot {
+	if s == nil || s.worker == nil {
+		return ImageJobWorkerSnapshot{}
+	}
+	return s.worker.Snapshot()
 }
 
 func NewImageJobPublicID() string {
@@ -138,6 +151,7 @@ func (s *ImageJobService) Create(ctx context.Context, input CreateImageJobInput)
 	if input.Parsed == nil {
 		return nil, false, fmt.Errorf("%w: parsed image request is required", ErrImageJobInvalidRequest)
 	}
+	runtimeSettings := s.runtimeSettings()
 	mode := strings.TrimSpace(input.Mode)
 	if mode == "" {
 		mode = "batch"
@@ -165,7 +179,7 @@ func (s *ImageJobService) Create(ctx context.Context, input CreateImageJobInput)
 	publicID := NewImageJobPublicID()
 	objectSuffix := fmt.Sprintf("%d/%s", input.APIKey.ID, publicID)
 	request, inputs, uploads, digest, err := prepareImageJobRequest(
-		objectSuffix, input.Parsed, scenes, s.cfg.Gateway.ImageJobs.MaxInputImages,
+		objectSuffix, input.Parsed, scenes, runtimeSettings.MaxInputImages,
 	)
 	if err != nil {
 		return nil, false, fmt.Errorf("%w: %v", ErrImageJobInvalidRequest, err)
@@ -176,8 +190,8 @@ func (s *ImageJobService) Create(ctx context.Context, input CreateImageJobInput)
 		if requiredFrameInputs < 2 {
 			requiredFrameInputs = 2
 		}
-		if requiredFrameInputs > s.cfg.Gateway.ImageJobs.MaxInputImages {
-			return nil, false, fmt.Errorf("%w: sequence frames require at least %d inputs, maximum is %d", ErrImageJobInvalidRequest, requiredFrameInputs, s.cfg.Gateway.ImageJobs.MaxInputImages)
+		if requiredFrameInputs > runtimeSettings.MaxInputImages {
+			return nil, false, fmt.Errorf("%w: sequence frames require at least %d inputs, maximum is %d", ErrImageJobInvalidRequest, requiredFrameInputs, runtimeSettings.MaxInputImages)
 		}
 		if request.Mask != nil || strings.TrimSpace(request.MaskURL) != "" {
 			return nil, false, fmt.Errorf("%w: sequence requests do not support masks", ErrImageJobInvalidRequest)
@@ -187,12 +201,23 @@ func (s *ImageJobService) Create(ctx context.Context, input CreateImageJobInput)
 	if len(request.Scenes) > 0 {
 		requestedCount = len(request.Scenes)
 	}
-	if requestedCount < 1 || requestedCount > s.cfg.Gateway.ImageJobs.MaxOutputsPerJob {
-		return nil, false, fmt.Errorf("%w: output count must be between 1 and %d", ErrImageJobInvalidRequest, s.cfg.Gateway.ImageJobs.MaxOutputsPerJob)
+	if requestedCount < 1 || requestedCount > runtimeSettings.MaxOutputsPerJob {
+		return nil, false, fmt.Errorf("%w: output count must be between 1 and %d", ErrImageJobInvalidRequest, runtimeSettings.MaxOutputsPerJob)
 	}
-	reservation, err := s.billing.Estimate(ctx, input.APIKey, input.Subscription, request)
+	var reservation ImageJobReservation
+	if len(input.CandidateModels) > 0 {
+		reservation, err = s.billing.EstimateCandidates(ctx, input.APIKey, input.Subscription, request, input.CandidateModels)
+	} else {
+		reservation, err = s.billing.Estimate(ctx, input.APIKey, input.Subscription, request)
+	}
 	if err != nil {
 		return nil, false, err
+	}
+	if input.Canvas != nil {
+		digest, err = digestImageCanvasJobRequest(digest, input.APIKey.ID, input.Canvas)
+		if err != nil {
+			return nil, false, fmt.Errorf("%w: %v", ErrImageJobInvalidRequest, err)
+		}
 	}
 	if err := storePreparedImageJobUploads(ctx, s.store, uploads); err != nil {
 		return nil, false, fmt.Errorf("%w: %v", ErrImageJobInvalidRequest, err)
@@ -225,7 +250,10 @@ func (s *ImageJobService) Create(ctx context.Context, input CreateImageJobInput)
 		Request: request, RequestDigest: digest, IdempotencyKeyHash: idempotencyHash,
 		ReservedUSD: reservation.AmountUSD, ReservationBillingType: reservation.BillingType,
 		ReservationSubscriptionID: reservation.SubscriptionID,
-		ExpiresAt:                 now.Add(time.Duration(s.cfg.Gateway.ImageJobs.ResultTTLSeconds) * time.Second), Inputs: inputs,
+		ExpiresAt:                 now.Add(time.Duration(runtimeSettings.ResultTTLSeconds) * time.Second),
+		MaxActiveJobsPerUser:      runtimeSettings.MaxActiveJobsPerUser,
+		Inputs:                    inputs,
+		Canvas:                    cloneImageCanvasJobMetadata(input.Canvas),
 	}
 	created, job, err := s.repo.CreateReserved(ctx, create)
 	if err != nil {
@@ -244,6 +272,54 @@ func (s *ImageJobService) Create(ctx context.Context, input CreateImageJobInput)
 		s.metrics.JobCreated(mode)
 	}
 	return job, false, nil
+}
+
+func (s *ImageJobService) runtimeSettings() ImageJobRuntimeSettings {
+	if s != nil && s.runtime != nil {
+		return s.runtime.Current()
+	}
+	if s != nil {
+		return defaultImageJobRuntimeSettings(s.cfg)
+	}
+	return defaultImageJobRuntimeSettings(nil)
+}
+
+func digestImageCanvasJobRequest(baseDigest string, apiKeyID int64, metadata *ImageCanvasJobMetadata) (string, error) {
+	if metadata == nil {
+		return baseDigest, nil
+	}
+	payload := struct {
+		BaseDigest    string   `json:"base_digest"`
+		APIKeyID      int64    `json:"api_key_id"`
+		ProjectID     *int64   `json:"project_id"`
+		ClientNodeID  string   `json:"client_node_id"`
+		SelectedModel string   `json:"selected_model"`
+		PolicyVersion int64    `json:"policy_version"`
+		AttemptPlan   []string `json:"attempt_plan"`
+	}{
+		BaseDigest: baseDigest, APIKeyID: apiKeyID, ProjectID: metadata.ProjectID,
+		ClientNodeID: metadata.ClientNodeID, SelectedModel: metadata.SelectedModel,
+		PolicyVersion: metadata.PolicyVersion, AttemptPlan: metadata.AttemptPlan,
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(encoded)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func cloneImageCanvasJobMetadata(metadata *ImageCanvasJobMetadata) *ImageCanvasJobMetadata {
+	if metadata == nil {
+		return nil
+	}
+	clone := *metadata
+	clone.AttemptPlan = append([]string(nil), metadata.AttemptPlan...)
+	if metadata.ProjectID != nil {
+		projectID := *metadata.ProjectID
+		clone.ProjectID = &projectID
+	}
+	return &clone
 }
 
 func (s *ImageJobService) GetOwned(ctx context.Context, publicID string, apiKeyID int64) (*ImageJob, error) {

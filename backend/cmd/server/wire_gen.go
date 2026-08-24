@@ -256,9 +256,14 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	openAIImageExecutor := service.ProvideOpenAIImageExecutor(openAIGatewayService, concurrencyService, configConfig)
 	imageJobBilling := service.ProvideImageJobBilling(openAIGatewayService, imageJobRepository, configConfig)
 	imageJobMetrics := service.ProvideImageJobMetrics()
-	imageJobService := service.ProvideImageJobService(imageJobRepository, imageJobObjectStore, openAIImageExecutor, apiKeyService, subscriptionService, imageJobBilling, imageJobMetrics, configConfig)
+	imageJobRuntimeSettingsService := service.ProvideImageJobRuntimeSettingsService(settingRepository, configConfig)
+	imageJobService := service.ProvideImageJobService(imageJobRepository, imageJobObjectStore, openAIImageExecutor, apiKeyService, subscriptionService, imageJobBilling, imageJobMetrics, configConfig, imageJobRuntimeSettingsService)
 	imageJobHandler := admin.NewImageJobHandler(imageJobService)
-	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, dataManagementHandler, backupHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, grokOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, tlsFingerprintProfileHandler, adminAPIKeyHandler, scheduledTestHandler, channelHandler, channelMonitorHandler, channelMonitorRequestTemplateHandler, contentModerationHandler, paymentHandler, affiliateHandler, complianceHandler, imageJobHandler)
+	imageModelPolicyRepository := repository.NewImageModelPolicyRepository(db)
+	imageModelPolicyService := service.NewImageModelPolicyService(imageModelPolicyRepository)
+	imageModelCatalog := service.ProvideImageModelCatalog(apiKeyRepository, groupRepository, accountRepository, configConfig, imageJobRuntimeSettingsService)
+	adminImageCanvasHandler := admin.NewImageCanvasHandler(imageModelPolicyService, imageModelCatalog, imageJobRuntimeSettingsService, imageJobService)
+	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, dataManagementHandler, backupHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, grokOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, tlsFingerprintProfileHandler, adminAPIKeyHandler, scheduledTestHandler, channelHandler, channelMonitorHandler, channelMonitorRequestTemplateHandler, contentModerationHandler, paymentHandler, affiliateHandler, complianceHandler, imageJobHandler, adminImageCanvasHandler)
 	usageRecordWorkerPool := service.NewUsageRecordWorkerPool(configConfig)
 	userMsgQueueCache := repository.NewUserMsgQueueCache(redisClient)
 	userMessageQueueService := service.ProvideUserMessageQueueService(userMsgQueueCache, rpmCache, configConfig)
@@ -269,9 +274,15 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	handlerPaymentHandler := handler.NewPaymentHandler(paymentService, paymentConfigService, channelService)
 	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentService, registry)
 	availableChannelHandler := handler.NewAvailableChannelHandler(channelService, apiKeyService, settingService)
+	imageCanvasRepository := repository.NewImageCanvasRepository(db)
+	imageCanvasProjectService := service.NewImageCanvasProjectService(imageCanvasRepository, imageJobObjectStore)
+	imageCanvasJobService := service.NewImageCanvasJobService(imageCanvasRepository, imageModelPolicyService, imageModelCatalog, apiKeyService, subscriptionService, imageJobService, imageJobObjectStore, contentModerationService)
+	canvasMediaTaskRepository := repository.NewCanvasMediaTaskRepository(db)
+	canvasMediaService := service.ProvideCanvasMediaService(canvasMediaTaskRepository, imageCanvasProjectService, imageModelPolicyService, imageModelCatalog, apiKeyService, subscriptionService, billingCacheService, openAIGatewayService, contentModerationService)
+	imageCanvasHandler := handler.ProvideImageCanvasHandler(imageCanvasProjectService, imageCanvasJobService, imageModelPolicyService, imageModelCatalog, canvasMediaService)
 	idempotencyCoordinator := service.ProvideIdempotencyCoordinator(idempotencyRepository, configConfig)
 	idempotencyCleanupService := service.ProvideIdempotencyCleanupService(idempotencyRepository, configConfig)
-	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, channelMonitorUserHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, handlerPaymentHandler, paymentWebhookHandler, availableChannelHandler, idempotencyCoordinator, idempotencyCleanupService)
+	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, channelMonitorUserHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, handlerPaymentHandler, paymentWebhookHandler, availableChannelHandler, imageCanvasHandler, idempotencyCoordinator, idempotencyCleanupService)
 	jwtAuthMiddleware := middleware.NewJWTAuthMiddleware(authService, userService)
 	adminAuthMiddleware := middleware.NewAdminAuthMiddleware(authService, userService, settingService)
 	apiKeyAuthMiddleware := middleware.NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, configConfig)
@@ -290,7 +301,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	paymentOrderExpiryService := service.ProvidePaymentOrderExpiryService(paymentService, leaderLockCache, db)
 	channelMonitorRunner := service.ProvideChannelMonitorRunner(channelMonitorService, settingService)
 	userPlatformQuotaUsageFlusher := service.ProvideUserPlatformQuotaUsageFlusher(configConfig, billingCache, serviceUserPlatformQuotaRepository, timingWheelService)
-	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, schedulerSnapshotService, tokenRefreshService, accountExpiryService, proxyExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, grokOAuthService, openAIGatewayService, imageJobService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, userPlatformQuotaUsageFlusher)
+	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, schedulerSnapshotService, tokenRefreshService, accountExpiryService, proxyExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, grokOAuthService, openAIGatewayService, imageJobService, canvasMediaService, scheduledTestRunnerService, backupService, paymentOrderExpiryService, channelMonitorRunner, userPlatformQuotaUsageFlusher)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v,
@@ -344,6 +355,7 @@ func provideCleanup(
 	grokOAuth *service.GrokOAuthService,
 	openAIGateway *service.OpenAIGatewayService,
 	imageJobs *service.ImageJobService,
+	canvasMedia *service.CanvasMediaService,
 	scheduledTestRunner *service.ScheduledTestRunnerService,
 	backupSvc *service.BackupService,
 	paymentOrderExpiry *service.PaymentOrderExpiryService,
@@ -360,6 +372,12 @@ func provideCleanup(
 		}
 
 		parallelSteps := []cleanupStep{
+			{"CanvasMediaService", func() error {
+				if canvasMedia != nil {
+					canvasMedia.Stop()
+				}
+				return nil
+			}},
 			{"ImageJobService", func() error {
 				if imageJobs != nil {
 					imageJobs.Stop()

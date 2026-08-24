@@ -35,8 +35,8 @@ const (
 	openAIChatGPTStartURL          = "https://chatgpt.com/"
 	openAIChatGPTFilesURL          = "https://chatgpt.com/backend-api/files"
 	openAIImageBackendUserAgent    = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-	openAIImageMaxDownloadBytes    = 20 << 20 // 20MB per image download
-	openAIImageMaxUploadPartSize   = 20 << 20 // 20MB per multipart upload part
+	openAIImageMaxDownloadBytes    = 64 << 20 // 64MB per image download, including lossless 4K output
+	openAIImageMaxUploadPartSize   = 64 << 20 // 64MB per multipart upload part
 	openAIImagesResponsesMainModel = "gpt-5.4-mini"
 )
 
@@ -58,6 +58,7 @@ type OpenAIImagesUpload struct {
 
 type OpenAIImagesRequest struct {
 	Endpoint           string
+	Provider           string
 	ContentType        string
 	Multipart          bool
 	Model              string
@@ -66,6 +67,8 @@ type OpenAIImagesRequest struct {
 	Stream             bool
 	N                  int
 	Size               string
+	AspectRatio        string
+	Resolution         string
 	ExplicitSize       bool
 	SizeTier           string
 	ResponseFormat     string
@@ -161,9 +164,12 @@ func (r *OpenAIImagesRequest) StickySessionSeed() string {
 	}
 	parts := []string{
 		"openai-images",
+		strings.TrimSpace(r.Provider),
 		strings.TrimSpace(r.Endpoint),
 		strings.TrimSpace(r.Model),
 		strings.TrimSpace(r.Size),
+		strings.TrimSpace(r.AspectRatio),
+		strings.TrimSpace(r.Resolution),
 		strings.TrimSpace(r.Prompt),
 	}
 	seed := strings.Join(parts, "|")
@@ -208,6 +214,8 @@ func parseOpenAIImagesJSONRequest(body []byte, req *OpenAIImagesRequest) error {
 		req.Size = strings.TrimSpace(sizeResult.String())
 		req.ExplicitSize = req.Size != ""
 	}
+	req.AspectRatio = strings.TrimSpace(gjson.GetBytes(body, "aspect_ratio").String())
+	req.Resolution = strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "resolution").String()))
 	req.ResponseFormat = strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "response_format").String()))
 	req.Quality = strings.TrimSpace(gjson.GetBytes(body, "quality").String())
 	req.Background = strings.TrimSpace(gjson.GetBytes(body, "background").String())
@@ -334,6 +342,12 @@ func parseOpenAIImagesMultipartRequest(body []byte, contentType string, req *Ope
 		case "size":
 			req.Size = value
 			req.ExplicitSize = value != ""
+		case "aspect_ratio":
+			req.AspectRatio = value
+			req.HasNativeOptions = true
+		case "resolution":
+			req.Resolution = strings.ToLower(value)
+			req.HasNativeOptions = true
 		case "response_format":
 			req.ResponseFormat = strings.ToLower(value)
 		case "stream":
@@ -463,6 +477,8 @@ func classifyOpenAIImagesCapability(req *OpenAIImagesRequest) OpenAIImagesCapabi
 
 func hasOpenAINativeImageOptions(exists func(path string) bool) bool {
 	for _, path := range []string{
+		"aspect_ratio",
+		"resolution",
 		"background",
 		"quality",
 		"style",
