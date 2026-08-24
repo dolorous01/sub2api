@@ -336,11 +336,3 @@ func nullableJSON(raw []byte) any {
 	}
 	return string(raw)
 }
-
-func nullTimePointer(value sql.NullTime) *time.Time {
-	if !value.Valid {
-		return nil
-	}
-	result := value.Time
-	return &result
-}

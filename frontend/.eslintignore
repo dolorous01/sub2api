@@ -7,7 +7,11 @@ node_modules/
 
 # 忽略构建输出
 dist/
+public/infinite-canvas/
 ../backend/internal/web/dist/
+
+# 固定的上游 React 快照由其独立校验与测试覆盖
+infinite-canvas/src/upstream/
 
 # 忽略缓存
 .cache/

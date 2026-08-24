@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -298,7 +299,7 @@ func mergeImageModelCapability(left, right ImageModelCapability) ImageModelCapab
 		AudioVoices:       append(append([]string(nil), left.AudioVoices...), right.AudioVoices...),
 		AudioFormats:      append(append([]string(nil), left.AudioFormats...), right.AudioFormats...),
 		AudioSpeedMin:     maxNonZeroFloat(left.AudioSpeedMin, right.AudioSpeedMin),
-		AudioSpeedMax:     max(left.AudioSpeedMax, right.AudioSpeedMax),
+		AudioSpeedMax:     math.Max(left.AudioSpeedMax, right.AudioSpeedMax),
 	}
 	if left.CustomSize != nil {
 		constraints := *left.CustomSize

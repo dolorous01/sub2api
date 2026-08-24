@@ -51,6 +51,8 @@ describe('createCanvasJobController', () => {
       const getJob = vi.fn()
         .mockResolvedValueOnce(job('queued'))
         .mockResolvedValueOnce(job('completed'))
+      // This stream fails before its first event to exercise polling fallback.
+      // eslint-disable-next-line require-yield
       const streamJob = vi.fn(async function* () {
         throw new Error('connection lost')
       })
