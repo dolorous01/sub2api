@@ -261,7 +261,7 @@ func TestLocalImageJobObjectStoreGetRejectsOversizedSparseFile(t *testing.T) {
 		t.Fatalf("OpenFile() error = %v", err)
 	}
 	if err := file.Truncate(maxImageJobObjectBytes + 1); err != nil {
-		file.Close()
+		_ = file.Close()
 		t.Fatalf("Truncate() error = %v", err)
 	}
 	if err := file.Close(); err != nil {
