@@ -767,7 +767,7 @@ func (s *CanvasMediaService) pollVideo(ctx context.Context, task *CanvasMediaTas
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	var request struct {
 		References []string
 		Parameters CanvasVideoParameters
@@ -819,7 +819,7 @@ func (s *CanvasMediaService) executeAudio(ctx context.Context, owner string, tas
 		s.gateway.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 		return err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		errorBody, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 		s.gateway.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
@@ -839,7 +839,7 @@ func (s *CanvasMediaService) executeAudio(ctx context.Context, owner string, tas
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	durationMS := estimateSpeechDurationMS(task.Prompt, parameters.Speed)
 	asset, err := s.projects.UploadAssetStream(ctx, ImageAssetStreamUpload{
 		UserID: task.UserID, ProjectPublicID: task.ProjectPublicID,

@@ -43,7 +43,7 @@ func (r *imageModelPolicyRepository) Replace(
 	if err != nil {
 		return nil, fmt.Errorf("begin image model policy replace: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	var current service.ImageModelPolicy
 	if err := tx.QueryRowContext(ctx, `
@@ -116,7 +116,7 @@ func (r *imageModelPolicyRepository) ListAudit(ctx context.Context, limit int) (
 	if err != nil {
 		return nil, fmt.Errorf("list image model policy audits: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	audits := make([]service.ImageModelPolicyAudit, 0)
 	for rows.Next() {
@@ -176,7 +176,7 @@ func loadImageModelPolicyItems(ctx context.Context, queryer imageModelPolicyQuer
 	if err != nil {
 		return nil, fmt.Errorf("load image model policy items: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	items := make([]service.ImageModelPolicyItem, 0)
 	for rows.Next() {

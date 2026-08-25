@@ -166,9 +166,7 @@ func (s *ImageSequenceExecutor) frameObjectIDs(frameIndex int) []string {
 	for _, input := range s.job.Request.Inputs {
 		ids = append(ids, input.ObjectKey)
 	}
-	for _, input := range s.job.Request.InputURLs {
-		ids = append(ids, input)
-	}
+	ids = append(ids, s.job.Request.InputURLs...)
 	if frameIndex == 0 {
 		return ids
 	}

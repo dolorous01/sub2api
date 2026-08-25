@@ -125,7 +125,7 @@ func (s *s3ImageJobObjectStore) Get(ctx context.Context, key string) (*service.I
 	if output == nil || output.Body == nil {
 		return nil, fmt.Errorf("get image job object: empty response body")
 	}
-	defer output.Body.Close()
+	defer func() { _ = output.Body.Close() }()
 	if output.ContentLength != nil && *output.ContentLength > maxImageJobObjectBytes {
 		return nil, fmt.Errorf("image job object exceeds maximum size")
 	}

@@ -1753,10 +1753,6 @@ func normalizeImageCanvasCapability(capability ImageModelCapability, maxInputIma
 	return capability
 }
 
-func normalizeImageCanvasSizes(sizes []string) []string {
-	return normalizeImageCanvasStrings(sizes)
-}
-
 func normalizeImageCanvasStrings(sizes []string) []string {
 	if len(sizes) == 0 {
 		return nil

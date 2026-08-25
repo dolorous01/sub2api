@@ -83,7 +83,7 @@ func (s *OpenAIGatewayService) ExecuteCanvasGrokMedia(
 	if response == nil || response.Body == nil {
 		return nil, fmt.Errorf("grok media upstream returned an empty response")
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, maxCanvasMediaUpstreamJSONBytes+1))
 	if err != nil {
 		return nil, err

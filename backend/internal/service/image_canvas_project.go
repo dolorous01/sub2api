@@ -164,9 +164,10 @@ func (s *ImageCanvasProjectService) UploadAsset(ctx context.Context, input Image
 		return nil, err
 	}
 	maxBytes := maxImageCanvasAssetBytes
-	if mediaKind == "audio" {
+	switch mediaKind {
+	case "audio":
 		maxBytes = maxAudioCanvasAssetBytes
-	} else if mediaKind == "video" {
+	case "video":
 		maxBytes = maxVideoCanvasAssetBytes
 	}
 	if len(input.Data) > maxBytes {
@@ -174,7 +175,8 @@ func (s *ImageCanvasProjectService) UploadAsset(ctx context.Context, input Image
 	}
 	width, height, durationMS := input.Width, input.Height, input.DurationMS
 	var imageConfig image.Config
-	if mediaKind == "image" {
+	switch mediaKind {
+	case "image":
 		config, format, decodeErr := image.DecodeConfig(bytes.NewReader(input.Data))
 		if decodeErr != nil || config.Width <= 0 || config.Height <= 0 {
 			return nil, fmt.Errorf("%w: image cannot be decoded", ErrImageAssetInvalid)
@@ -186,7 +188,7 @@ func (s *ImageCanvasProjectService) UploadAsset(ctx context.Context, input Image
 			return nil, fmt.Errorf("%w: image exceeds 40 megapixels", ErrImageAssetInvalid)
 		}
 		imageConfig, width, height, durationMS = config, config.Width, config.Height, 0
-	} else if mediaKind == "video" {
+	case "video":
 		if width <= 0 || height <= 0 || width > maxCanvasMediaEdge || height > maxCanvasMediaEdge {
 			return nil, fmt.Errorf("%w: video dimensions are missing or invalid", ErrImageAssetInvalid)
 		}
@@ -196,7 +198,7 @@ func (s *ImageCanvasProjectService) UploadAsset(ctx context.Context, input Image
 		if durationMS <= 0 || durationMS > maxCanvasMediaDurationMS {
 			return nil, fmt.Errorf("%w: video duration is invalid", ErrImageAssetInvalid)
 		}
-	} else {
+	default:
 		width, height = 0, 0
 		if durationMS <= 0 || durationMS > maxCanvasMediaDurationMS {
 			return nil, fmt.Errorf("%w: audio duration is invalid", ErrImageAssetInvalid)
@@ -670,7 +672,8 @@ func (s *ImageCanvasProjectService) UploadAssetStream(ctx context.Context, input
 
 	width, height, durationMS := input.Width, input.Height, input.DurationMS
 	var thumbnail []byte
-	if mediaKind == "image" {
+	switch mediaKind {
+	case "image":
 		if _, err := staging.Seek(0, io.SeekStart); err != nil {
 			return nil, err
 		}
@@ -693,7 +696,7 @@ func (s *ImageCanvasProjectService) UploadAssetStream(ctx context.Context, input
 				}
 			}
 		}
-	} else if mediaKind == "video" {
+	case "video":
 		if width <= 0 || height <= 0 || width > maxCanvasMediaEdge || height > maxCanvasMediaEdge ||
 			int64(width)*int64(height) > maxImageCanvasAssetPixels {
 			return nil, fmt.Errorf("%w: video dimensions are missing or invalid", ErrImageAssetInvalid)
@@ -701,7 +704,7 @@ func (s *ImageCanvasProjectService) UploadAssetStream(ctx context.Context, input
 		if durationMS <= 0 || durationMS > maxCanvasMediaDurationMS {
 			return nil, fmt.Errorf("%w: video duration is invalid", ErrImageAssetInvalid)
 		}
-	} else {
+	default:
 		width, height = 0, 0
 		if durationMS <= 0 || durationMS > maxCanvasMediaDurationMS {
 			return nil, fmt.Errorf("%w: audio duration is invalid", ErrImageAssetInvalid)

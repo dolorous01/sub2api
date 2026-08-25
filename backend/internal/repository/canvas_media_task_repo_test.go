@@ -283,9 +283,10 @@ func canvasMediaTaskRows(
 	attemptCount int,
 ) *sqlmock.Rows {
 	phase := "preflight"
-	if status == service.ImageJobStatusRunning {
+	switch status {
+	case service.ImageJobStatusRunning:
 		phase = "submitting"
-	} else if status == service.ImageJobStatusCanceled {
+	case service.ImageJobStatusCanceled:
 		phase = "canceled"
 	}
 	var completedAt any

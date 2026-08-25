@@ -404,7 +404,7 @@ func resolveConsumerImageBytes(ctx context.Context, pointer openAIImagePointerIn
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return nil, fmt.Errorf("download image bytes failed: status %d", response.StatusCode)
 	}

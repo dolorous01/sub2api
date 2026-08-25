@@ -44,7 +44,7 @@ func (r *canvasMediaTaskRepository) Create(ctx context.Context, input service.Ca
 	if err != nil {
 		return nil, false, fmt.Errorf("begin canvas media task create: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var id int64
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO canvas_media_tasks (
@@ -106,7 +106,7 @@ func (r *canvasMediaTaskRepository) ListRecoverable(ctx context.Context, userID,
 	if err != nil {
 		return nil, fmt.Errorf("list recoverable canvas media tasks: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	tasks := make([]service.CanvasMediaTask, 0)
 	for rows.Next() {
 		task, err := scanCanvasMediaTask(rows)
@@ -139,7 +139,7 @@ func (r *canvasMediaTaskRepository) claimNext(
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var id int64
 	err = tx.QueryRowContext(ctx, `
 		SELECT id FROM canvas_media_tasks

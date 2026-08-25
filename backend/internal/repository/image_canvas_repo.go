@@ -35,7 +35,7 @@ func (r *imageCanvasRepository) ListProjects(ctx context.Context, userID int64) 
 	if err != nil {
 		return nil, fmt.Errorf("list image canvas projects: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	projects := make([]service.ImageCanvasProject, 0)
 	for rows.Next() {
@@ -66,7 +66,7 @@ func (r *imageCanvasRepository) CreateProject(
 	if err != nil {
 		return nil, fmt.Errorf("begin image canvas project create: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	publicID = strings.TrimSpace(publicID)
 	if publicID == "" {
@@ -123,7 +123,7 @@ func (r *imageCanvasRepository) UpdateProject(
 	if err != nil {
 		return nil, fmt.Errorf("begin image canvas project update: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	project, err := scanImageCanvasProject(tx.QueryRowContext(ctx, `
 		UPDATE image_canvas_projects
@@ -187,7 +187,7 @@ func (r *imageCanvasRepository) CreateAsset(ctx context.Context, input service.I
 	if err != nil {
 		return nil, fmt.Errorf("begin image asset create: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if input.ProjectID != nil {
 		var exists bool
@@ -270,7 +270,7 @@ func (r *imageCanvasRepository) ListOpenJobs(ctx context.Context, userID int64, 
 	if err != nil {
 		return nil, fmt.Errorf("list open image canvas jobs: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	jobs := make([]service.ImageJob, 0)
 	for rows.Next() {
 		job, err := scanImageJob(rows)

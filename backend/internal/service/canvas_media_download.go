@@ -84,7 +84,7 @@ func downloadCanvasMediaURL(ctx context.Context, rawURL string, maxBytes int64) 
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return nil, fmt.Errorf("canvas media download returned status %d", response.StatusCode)
 	}

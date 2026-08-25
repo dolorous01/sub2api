@@ -313,7 +313,7 @@ func (h *ImageCanvasHandler) UploadAsset(c *gin.Context) {
 		writeImageCanvasError(c, service.ErrImageAssetInvalid)
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	width, widthErr := parseOptionalCanvasMediaInt(c.PostForm("width"))
 	height, heightErr := parseOptionalCanvasMediaInt(c.PostForm("height"))
 	durationMS, durationErr := parseOptionalCanvasMediaInt64(c.PostForm("duration_ms"))
@@ -343,7 +343,7 @@ func (h *ImageCanvasHandler) DownloadAsset(c *gin.Context) {
 		writeImageCanvasError(c, err)
 		return
 	}
-	defer object.Reader.Close()
+	defer func() { _ = object.Reader.Close() }()
 	contentType := strings.TrimSpace(object.ContentType)
 	if contentType == "" {
 		contentType = "application/octet-stream"

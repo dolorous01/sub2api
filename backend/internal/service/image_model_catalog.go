@@ -36,6 +36,15 @@ func NewImageModelCatalog(
 	accounts AccountRepository,
 	cfg *config.Config,
 ) ImageModelCatalog {
+	return newImageModelCatalog(apiKeys, groups, accounts, cfg)
+}
+
+func newImageModelCatalog(
+	apiKeys APIKeyRepository,
+	groups GroupRepository,
+	accounts AccountRepository,
+	cfg *config.Config,
+) *imageModelCatalog {
 	defaults := config.DefaultImageJobsConfig()
 	maxInputImages := defaults.MaxInputImages
 	maxOutputs := defaults.MaxOutputsPerJob
@@ -60,7 +69,7 @@ func ProvideImageModelCatalog(
 	cfg *config.Config,
 	runtime *ImageJobRuntimeSettingsService,
 ) ImageModelCatalog {
-	catalog := NewImageModelCatalog(apiKeys, groups, accounts, cfg).(*imageModelCatalog)
+	catalog := newImageModelCatalog(apiKeys, groups, accounts, cfg)
 	catalog.runtime = runtime
 	return catalog
 }
