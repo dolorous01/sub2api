@@ -39,7 +39,7 @@ export default defineConfig(({ mode }) => {
       __CANVAS_SOURCE_URL__: JSON.stringify(sourceURL),
       __APP_VERSION__: JSON.stringify('0.16.0-sub2api.1'),
       __APP_RELEASES__: JSON.stringify([]),
-      'process.env.NODE_ENV': JSON.stringify(mode === 'production' ? 'production' : 'development')
+      'process.env': JSON.stringify({ NODE_ENV: mode === 'production' ? 'production' : 'development' })
     },
     resolve: {
       alias: [
