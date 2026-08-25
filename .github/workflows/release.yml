@@ -280,7 +280,9 @@ jobs:
 
   sync-version-file:
     needs: [release]
-    if: ${{ needs.release.result == 'success' }}
+    # Prerelease builds are deployment candidates and must not rewrite the
+    # default branch's stable VERSION file.
+    if: ${{ needs.release.result == 'success' && !contains(github.event.inputs.tag || github.ref_name, '-') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout default branch

@@ -14,6 +14,19 @@ function releaseNotices(): Plugin {
   }
 }
 
+function browserRuntimeGuard(): Plugin {
+  return {
+    name: 'canvas-browser-runtime-guard',
+    generateBundle(_options, bundle) {
+      for (const output of Object.values(bundle)) {
+        if (output.type === 'chunk' && /\bprocess\.env\b/.test(output.code)) {
+          this.error(`canvas browser bundle contains an unresolved process.env reference: ${output.fileName}`)
+        }
+      }
+    }
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const sourceURL = process.env.VITE_CANVAS_SOURCE_URL || ''
   if (mode === 'production' && !sourceURL.startsWith('https://')) {
@@ -21,11 +34,12 @@ export default defineConfig(({ mode }) => {
   }
   return {
     base: '/infinite-canvas/',
-    plugins: [react(), releaseNotices()],
+    plugins: [react(), browserRuntimeGuard(), releaseNotices()],
     define: {
       __CANVAS_SOURCE_URL__: JSON.stringify(sourceURL),
       __APP_VERSION__: JSON.stringify('0.16.0-sub2api.1'),
-      __APP_RELEASES__: JSON.stringify([])
+      __APP_RELEASES__: JSON.stringify([]),
+      'process.env.NODE_ENV': JSON.stringify(mode === 'production' ? 'production' : 'development')
     },
     resolve: {
       alias: [
