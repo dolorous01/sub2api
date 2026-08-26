@@ -1480,7 +1480,7 @@ export default {
       description: '管理图片画布的模型链、运行策略与工作区',
       policyTab: '模型链',
       runtimeTab: '运行策略',
-      canvasTab: '画布预览',
+      openStudio: '打开创作工作台',
       policyTitle: '有序图片模型链',
       policyDescription: '仅显示当前可调度模型，顺序决定自动回退次序。',
       enabled: '启用画布图片任务',

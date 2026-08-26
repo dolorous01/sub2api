@@ -150,6 +150,9 @@ func TestMigrationsCreateImageCanvasSchema(t *testing.T) {
 		"image_assets",
 		"image_canvas_asset_references",
 		"canvas_media_tasks",
+		"image_editor_documents",
+		"image_editor_asset_references",
+		"image_editor_revisions",
 	} {
 		var got string
 		require.NoError(t, tx.QueryRow(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name=$1`, table).Scan(&got))
@@ -177,6 +180,10 @@ func TestMigrationsCreateImageCanvasSchema(t *testing.T) {
 	requireColumn(t, tx, "canvas_media_tasks", "kind", "character varying", 16, false)
 	requireColumn(t, tx, "canvas_media_tasks", "request", "jsonb", 0, false)
 	requireColumn(t, tx, "canvas_media_tasks", "result_asset_id", "bigint", 0, true)
+	requireColumn(t, tx, "image_jobs", "editor_document_id", "bigint", 0, true)
+	requireColumn(t, tx, "image_editor_documents", "document", "jsonb", 0, false)
+	requireColumn(t, tx, "image_editor_documents", "version", "bigint", 0, false)
+	requireColumn(t, tx, "image_editor_revisions", "parameters", "jsonb", 0, false)
 	requireIndex(t, tx, "image_canvas_projects", "idx_image_canvas_projects_user_updated")
 	requireIndex(t, tx, "image_assets", "idx_image_assets_owner_project")
 	requireIndex(t, tx, "image_assets", "idx_image_assets_owner_kind_created")
@@ -184,6 +191,11 @@ func TestMigrationsCreateImageCanvasSchema(t *testing.T) {
 	requireIndex(t, tx, "image_jobs", "idx_image_jobs_project_created")
 	requireIndex(t, tx, "canvas_media_tasks", "idx_canvas_media_tasks_claim")
 	requireIndex(t, tx, "canvas_media_tasks", "idx_canvas_media_tasks_user_project")
+	requireIndex(t, tx, "image_editor_documents", "idx_image_editor_documents_project_node_active")
+	requireIndex(t, tx, "image_editor_documents", "idx_image_editor_documents_project_updated")
+	requireIndex(t, tx, "image_editor_asset_references", "idx_image_editor_asset_references_asset")
+	requireIndex(t, tx, "image_editor_revisions", "idx_image_editor_revisions_document_created")
+	requireIndex(t, tx, "image_jobs", "idx_image_jobs_editor_created")
 }
 
 func TestMigrationsRunner_AuthIdentityAndPaymentSchemaStayAligned(t *testing.T) {

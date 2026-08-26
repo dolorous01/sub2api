@@ -80,10 +80,10 @@ async function runImageJob(
     operation,
     api_key_id: apiKeyID,
     selected_model: selectedModel,
-    prompt: withSystemPrompt(config, prompt),
+    prompt: withCanvasSystemPrompt(config, prompt),
     input_asset_ids: inputAssetIDs,
     mask_asset_id: maskAssetID,
-    parameters: imageParameters(config, selectedModel)
+    parameters: buildCanvasImageParameters(config, selectedModel)
   }
   const canvasAPI = createCanvasAPI(getCanvasRuntimeHost())
   const controller = createCanvasJobController(canvasAPI)
@@ -124,7 +124,7 @@ async function ensureReferenceAssetID(reference: ReferenceImage): Promise<string
   return assetID
 }
 
-function imageParameters(config: AiConfig, model: string): CanvasJobCreate['parameters'] {
+export function buildCanvasImageParameters(config: AiConfig, model: string): CanvasJobCreate['parameters'] {
   const capability = getCanvasModelCapability(model)
   const count = Math.max(1, Math.min(capability?.max_outputs || 4, Math.floor(Math.abs(Number(config.count)) || 1)))
   const parameters: CanvasModelParameters & { n: number } = { n: count }
@@ -154,7 +154,7 @@ function allowedValue(value: string | undefined, allowed?: string[]): string | u
   return allowed?.some((item) => item.toLowerCase() === value.toLowerCase()) ? value : undefined
 }
 
-function withSystemPrompt(config: AiConfig, prompt: string): string {
+export function withCanvasSystemPrompt(config: AiConfig, prompt: string): string {
   const systemPrompt = config.systemPrompt.trim()
   return systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt
 }

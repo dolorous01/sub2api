@@ -1476,7 +1476,7 @@ export default {
       description: 'Manage the image canvas model chain, runtime policy, and workspace',
       policyTab: 'Model chain',
       runtimeTab: 'Runtime policy',
-      canvasTab: 'Canvas preview',
+      openStudio: 'Open Studio',
       policyTitle: 'Ordered image model chain',
       policyDescription: 'Only schedulable models are shown. The order controls automatic fallback.',
       enabled: 'Enable image canvas jobs',

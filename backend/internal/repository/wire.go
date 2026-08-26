@@ -82,6 +82,7 @@ var ProviderSet = wire.NewSet(
 	NewImageJobRepository,
 	NewImageModelPolicyRepository,
 	NewImageCanvasRepository,
+	NewImageEditorRepository,
 	NewCanvasMediaTaskRepository,
 	ProvideImageJobObjectStore,
 	NewDashboardAggregationRepository,

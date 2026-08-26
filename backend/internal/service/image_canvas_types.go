@@ -9,17 +9,21 @@ import (
 )
 
 var (
-	ErrImageModelPolicyInvalid           = errors.New("image model policy is invalid")
-	ErrImageModelPolicyVersionConflict   = errors.New("image model policy version conflict")
-	ErrImageModelSelectionInvalid        = errors.New("selected image model is not allowed")
-	ErrNoCompatibleImageModel            = errors.New("no compatible image model")
-	ErrImageCanvasAPIKeyNotFound         = errors.New("image canvas api key not found")
-	ErrImageCanvasProjectNotFound        = errors.New("image canvas project not found")
-	ErrImageCanvasProjectVersionConflict = errors.New("image canvas project version conflict")
-	ErrImageCanvasDocumentInvalid        = errors.New("image canvas document is invalid")
-	ErrImageAssetInvalid                 = errors.New("image asset is invalid")
-	ErrImageAssetNotFound                = errors.New("image asset not found")
-	ErrImageCanvasModerationBlocked      = errors.New("image canvas request blocked by content moderation")
+	ErrImageModelPolicyInvalid            = errors.New("image model policy is invalid")
+	ErrImageModelPolicyVersionConflict    = errors.New("image model policy version conflict")
+	ErrImageModelSelectionInvalid         = errors.New("selected image model is not allowed")
+	ErrNoCompatibleImageModel             = errors.New("no compatible image model")
+	ErrImageCanvasAPIKeyNotFound          = errors.New("image canvas api key not found")
+	ErrImageCanvasProjectNotFound         = errors.New("image canvas project not found")
+	ErrImageCanvasProjectVersionConflict  = errors.New("image canvas project version conflict")
+	ErrImageCanvasDocumentInvalid         = errors.New("image canvas document is invalid")
+	ErrImageAssetInvalid                  = errors.New("image asset is invalid")
+	ErrImageAssetNotFound                 = errors.New("image asset not found")
+	ErrImageCanvasModerationBlocked       = errors.New("image canvas request blocked by content moderation")
+	ErrImageEditorDocumentNotFound        = errors.New("image editor document not found")
+	ErrImageEditorDocumentConflict        = errors.New("image editor document conflict")
+	ErrImageEditorDocumentVersionConflict = errors.New("image editor document version conflict")
+	ErrImageEditorDocumentInvalid         = errors.New("image editor document is invalid")
 )
 
 type ImageOperation string
@@ -204,6 +208,70 @@ type ImageAssetCreate struct {
 	SHA256             string
 	OriginJobID        *int64
 	ParentAssetIDs     json.RawMessage
+}
+
+type ImageEditorAssetReference struct {
+	AssetID       int64  `json:"-"`
+	AssetPublicID string `json:"asset_id"`
+	Role          string `json:"role"`
+	ElementID     string `json:"element_id"`
+}
+
+type ImageEditorRevision struct {
+	ID         int64           `json:"-"`
+	PublicID   string          `json:"id"`
+	DocumentID int64           `json:"-"`
+	Version    int64           `json:"version"`
+	AssetID    int64           `json:"-"`
+	Asset      *ImageAsset     `json:"asset"`
+	Operation  string          `json:"operation"`
+	Parameters json.RawMessage `json:"parameters"`
+	CreatedAt  time.Time       `json:"created_at"`
+}
+
+type ImageEditorDocument struct {
+	ID              int64                       `json:"-"`
+	PublicID        string                      `json:"id"`
+	UserID          int64                       `json:"-"`
+	ProjectID       int64                       `json:"-"`
+	ProjectPublicID string                      `json:"project_id"`
+	NodeID          string                      `json:"node_id"`
+	BaseAssetID     int64                       `json:"-"`
+	BaseAsset       *ImageAsset                 `json:"base_asset"`
+	CurrentAssetID  int64                       `json:"-"`
+	CurrentAsset    *ImageAsset                 `json:"current_asset"`
+	Document        json.RawMessage             `json:"document"`
+	Version         int64                       `json:"version"`
+	AssetReferences []ImageEditorAssetReference `json:"asset_references"`
+	Revisions       []ImageEditorRevision       `json:"revisions"`
+	CreatedAt       time.Time                   `json:"created_at"`
+	UpdatedAt       time.Time                   `json:"updated_at"`
+}
+
+type ImageEditorDocumentCreate struct {
+	UserID            int64
+	ProjectPublicID   string
+	NodeID            string
+	BaseAssetPublicID string
+	Document          json.RawMessage
+	AssetReferences   []ImageEditorAssetReference
+}
+
+type ImageEditorDocumentUpdate struct {
+	UserID               int64
+	PublicID             string
+	Version              int64
+	Document             json.RawMessage
+	CurrentAssetPublicID string
+	Operation            string
+	Parameters           json.RawMessage
+	AssetReferences      []ImageEditorAssetReference
+}
+
+type ImageEditorRepository interface {
+	CreateOrGet(ctx context.Context, input ImageEditorDocumentCreate) (*ImageEditorDocument, bool, error)
+	GetOwned(ctx context.Context, userID int64, publicID string) (*ImageEditorDocument, error)
+	Update(ctx context.Context, input ImageEditorDocumentUpdate) (*ImageEditorDocument, error)
 }
 
 type ImageCanvasRepository interface {

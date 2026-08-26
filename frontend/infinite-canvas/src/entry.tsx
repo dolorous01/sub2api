@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App, ConfigProvider } from 'antd'
 import enUS from 'antd/es/locale/en_US'
 import zhCN from 'antd/es/locale/zh_CN'
-import { useEffect, useMemo, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useMemo, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import { Navigate, RouterProvider, createMemoryRouter } from 'react-router-dom'
@@ -27,6 +27,8 @@ import { useThemeStore } from '@/stores/use-theme-store'
 import 'antd/dist/reset.css'
 import 'streamdown/styles.css'
 import '@/styles/globals.css'
+
+const FocusedImageEditor = lazy(() => import('@sub2api/editor/focused-image-editor'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,6 +66,14 @@ function CanvasRuntime({ mountElement }: { mountElement: HTMLElement }) {
       { path: '/', element: <Navigate to="/canvas" replace /> },
       { path: '/canvas', element: <CanvasProjectsPage /> },
       { path: '/canvas/:id', element: <CanvasProjectRuntime /> },
+      {
+        path: '/editor/:projectId/:nodeId',
+        element: (
+          <Suspense fallback={<div className="flex h-full items-center justify-center">Loading...</div>}>
+            <FocusedImageEditor />
+          </Suspense>
+        )
+      },
       { path: '*', element: <Navigate to="/canvas" replace /> }
     ], { initialEntries: ['/canvas'] }),
     []

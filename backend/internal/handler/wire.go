@@ -100,8 +100,9 @@ func ProvideImageCanvasHandler(
 	policies *service.ImageModelPolicyService,
 	catalog service.ImageModelCatalog,
 	media *service.CanvasMediaService,
+	editor *service.ImageEditorService,
 ) *ImageCanvasHandler {
-	return NewImageCanvasHandler(projects, jobs, policies, catalog).SetMediaService(media)
+	return NewImageCanvasHandler(projects, jobs, policies, catalog).SetMediaService(media).SetEditorService(editor)
 }
 
 // ProvideAdminSettingHandler creates admin.SettingHandler with notification template APIs.

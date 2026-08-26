@@ -129,6 +129,65 @@ export interface CanvasAsset {
   thumbnail_url?: string
 }
 
+export interface ImageEditorDocumentV1 {
+  schema_version: 1
+  viewport: { zoom: number; x: number; y: number }
+  canvas: {
+    width: number
+    height: number
+    background: 'transparent' | 'white' | 'black'
+  }
+  selected_revision_id?: string
+}
+
+export interface ImageEditorAssetReference {
+  asset_id: string
+  role: 'source' | 'layer' | 'mask' | 'result'
+  element_id: string
+}
+
+export type ImageEditorOperation = 'crop' | 'mask_edit' | 'background_replace' | 'outpaint' | 'revision_select'
+
+export interface ImageEditorRevision {
+  id: string
+  version: number
+  asset: CanvasAsset
+  operation: ImageEditorOperation
+  parameters: Record<string, unknown>
+  created_at: string
+}
+
+export interface ImageEditorDocument {
+  id: string
+  project_id: string
+  node_id: string
+  base_asset: CanvasAsset
+  current_asset: CanvasAsset
+  document: ImageEditorDocumentV1
+  version: number
+  asset_references: ImageEditorAssetReference[]
+  revisions: ImageEditorRevision[]
+  created_at: string
+  updated_at: string
+}
+
+export interface ImageEditorDocumentCreate {
+  project_id: string
+  node_id: string
+  base_asset_id: string
+  document: ImageEditorDocumentV1
+  asset_references?: ImageEditorAssetReference[]
+}
+
+export interface ImageEditorDocumentUpdate {
+  version: number
+  document: ImageEditorDocumentV1
+  current_asset_id?: string
+  operation?: ImageEditorOperation
+  parameters?: Record<string, unknown>
+  asset_references?: ImageEditorAssetReference[]
+}
+
 export type CanvasJobStatus =
   | 'queued'
   | 'running'
@@ -257,6 +316,10 @@ export interface CanvasAPI {
   getMediaTask(id: string, signal?: AbortSignal): Promise<CanvasMediaTask>
   cancelMediaTask(id: string): Promise<CanvasMediaTask>
   getAssetBlob(id: string, signal?: AbortSignal): Promise<Blob>
+  createEditorDocument(input: ImageEditorDocumentCreate): Promise<ImageEditorDocument>
+  getEditorDocument(id: string): Promise<ImageEditorDocument>
+  updateEditorDocument(id: string, input: ImageEditorDocumentUpdate): Promise<ImageEditorDocument>
+  uploadEditorDerivedAsset(id: string, file: File, parentAssetID: string): Promise<CanvasAsset>
 }
 
 type APIEnvelope<T> = { code: number; message: string; data: T }
@@ -315,6 +378,15 @@ export function createCanvasAPI(host: CanvasHostContext): CanvasAPI {
     async getAssetBlob(id, signal) {
       const stream = await host.stream(`/image-canvas/assets/${encodeURIComponent(id)}`, { signal })
       return new Response(stream).blob()
+    },
+    createEditorDocument: (input) => request('POST', '/editor-documents', input),
+    getEditorDocument: (id) => request('GET', `/editor-documents/${encodeURIComponent(id)}`),
+    updateEditorDocument: (id, input) => request('PATCH', `/editor-documents/${encodeURIComponent(id)}`, input),
+    async uploadEditorDerivedAsset(id, file, parentAssetID) {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('parent_asset_id', parentAssetID)
+      return request('POST', `/editor-documents/${encodeURIComponent(id)}/assets`, form)
     }
   }
 }

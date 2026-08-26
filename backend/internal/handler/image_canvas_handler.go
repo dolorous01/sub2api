@@ -55,6 +55,7 @@ type ImageCanvasHandler struct {
 	policies imageCanvasPolicyService
 	catalog  service.ImageModelCatalog
 	media    imageCanvasMediaService
+	editors  imageEditorService
 }
 
 func NewImageCanvasHandler(
@@ -581,16 +582,22 @@ func writeImageCanvasError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, service.ErrImageCanvasProjectNotFound),
 		errors.Is(err, service.ErrImageAssetNotFound),
+		errors.Is(err, service.ErrImageEditorDocumentNotFound),
 		errors.Is(err, service.ErrImageCanvasAPIKeyNotFound),
 		errors.Is(err, service.ErrImageJobNotFound),
 		errors.Is(err, service.ErrCanvasMediaTaskNotFound):
 		response.ErrorWithDetails(c, http.StatusNotFound, "Image canvas resource not found", "image_canvas_not_found", nil)
 	case errors.Is(err, service.ErrImageCanvasProjectVersionConflict):
 		response.ErrorWithDetails(c, http.StatusConflict, "Image canvas project was updated elsewhere", "project_version_conflict", nil)
+	case errors.Is(err, service.ErrImageEditorDocumentVersionConflict):
+		response.ErrorWithDetails(c, http.StatusConflict, "Image editor document was updated elsewhere", "editor_version_conflict", nil)
+	case errors.Is(err, service.ErrImageEditorDocumentConflict):
+		response.ErrorWithDetails(c, http.StatusConflict, "Image editor node is linked to another base asset", "editor_document_conflict", nil)
 	case errors.Is(err, service.ErrImageJobIdempotencyConflict), errors.Is(err, service.ErrImageJobCancelConflict),
 		errors.Is(err, service.ErrCanvasMediaTaskConflict), errors.Is(err, service.ErrCanvasMediaTaskIdempotencyConflict):
 		response.ErrorWithDetails(c, http.StatusConflict, err.Error(), "image_canvas_job_conflict", nil)
 	case errors.Is(err, service.ErrImageCanvasDocumentInvalid), errors.Is(err, service.ErrImageAssetInvalid),
+		errors.Is(err, service.ErrImageEditorDocumentInvalid),
 		errors.Is(err, service.ErrImageJobInvalidRequest), errors.Is(err, service.ErrCanvasMediaTaskInvalid):
 		response.ErrorWithDetails(c, http.StatusBadRequest, err.Error(), "invalid_image_canvas_request", nil)
 	case errors.Is(err, service.ErrImageModelSelectionInvalid), errors.Is(err, service.ErrNoCompatibleImageModel):

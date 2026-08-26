@@ -639,6 +639,7 @@ var ProviderSet = wire.NewSet(
 	NewImageModelPolicyService,
 	ProvideImageModelCatalog,
 	NewImageCanvasProjectService,
+	NewImageEditorService,
 	NewImageCanvasJobService,
 	ProvideCanvasMediaService,
 	wire.Bind(new(AccountRuntimeBlocker), new(*OpenAIGatewayService)),

@@ -34,6 +34,7 @@ type CanvasNodeHoverToolbarProps = {
     onAngle: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
     onReversePrompt: (node: CanvasNodeData) => void;
+    onFocusedEdit: (node: CanvasNodeData) => void;
     onRetry: (node: CanvasNodeData) => void;
     onToggleFreeResize: (node: CanvasNodeData) => void;
     onDelete: (node: CanvasNodeData) => void;
@@ -71,6 +72,7 @@ export function CanvasNodeHoverToolbar({
     onAngle,
     onViewImage,
     onReversePrompt,
+    onFocusedEdit,
     onRetry,
     onToggleFreeResize,
     onDelete,
@@ -87,10 +89,12 @@ export function CanvasNodeHoverToolbar({
 
     useEffect(() => {
         try {
-            const stored = window.localStorage.getItem(IMAGE_QUICK_TOOLS_STORAGE_KEY);
+            const current = window.localStorage.getItem(IMAGE_QUICK_TOOLS_STORAGE_KEY);
+            const stored = current || window.localStorage.getItem("canvas-image-quick-tools-v7");
             if (!stored) return;
             const parsed = JSON.parse(stored) as unknown;
             const config = readImageQuickToolsConfig(parsed);
+            if (!current && !config.ids.includes("focusedEdit")) config.ids.unshift("focusedEdit");
             setQuickImageToolIds(config.ids);
             setShowImageToolLabels(config.showLabels);
         } catch {
@@ -125,7 +129,7 @@ export function CanvasNodeHoverToolbar({
         }
         copyText(prompt, t("common.promptCopied"));
     };
-    const imageTools = buildImageToolbarTools(node, { onUpload, onToggleFreeResize, onMaskEdit, onCrop, onSplit, onUpscale, onSuperResolve, onAngle, onViewImage, onCopyPrompt: copyImagePrompt, onReversePrompt });
+    const imageTools = buildImageToolbarTools(node, { onUpload, onToggleFreeResize, onMaskEdit, onCrop, onSplit, onUpscale, onSuperResolve, onAngle, onViewImage, onCopyPrompt: copyImagePrompt, onReversePrompt, onFocusedEdit });
 
     function openImageToolSettings() {
         onKeep(activeNode.id);

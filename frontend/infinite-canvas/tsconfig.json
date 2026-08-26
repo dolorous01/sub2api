@@ -40,6 +40,8 @@
     "src/stores/**/*.ts",
     "src/jobs/**/*.ts",
     "src/components/**/*.tsx",
+    "src/editor/**/*.ts",
+    "src/editor/**/*.tsx",
     "src/runtime/**/*.ts",
     "src/adapters/**/*.ts",
     "src/i18n.tsx",

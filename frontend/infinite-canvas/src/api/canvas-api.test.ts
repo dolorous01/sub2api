@@ -114,4 +114,64 @@ describe('createCanvasAPI', () => {
     )
     expect(request).toHaveBeenNthCalledWith(4, 'DELETE', '/image-canvas/media/tasks/task%2Fid', undefined, undefined)
   })
+
+  it('uses editor document routes and unwraps response envelopes', async () => {
+    const editor = {
+      id: 'editor-1',
+      project_id: 'project-1',
+      node_id: 'node-1',
+      base_asset: { id: 'asset-1' },
+      current_asset: { id: 'asset-1' },
+      document: {
+        schema_version: 1,
+        viewport: { zoom: 1, x: 0, y: 0 },
+        canvas: { width: 1024, height: 768, background: 'transparent' }
+      },
+      version: 3,
+      asset_references: [],
+      revisions: []
+    }
+    const request = vi.fn().mockResolvedValue({ code: 0, message: 'ok', data: editor })
+    const host = { request } as unknown as CanvasHostContext
+    const api = createCanvasAPI(host)
+
+    const created = await api.createEditorDocument({
+      project_id: 'project-1',
+      node_id: 'node-1',
+      base_asset_id: 'asset-1',
+      document: editor.document as never
+    })
+    await api.getEditorDocument('editor/id')
+    await api.updateEditorDocument('editor/id', {
+      version: 3,
+      document: editor.document as never,
+      current_asset_id: 'asset-2',
+      operation: 'crop',
+      parameters: { x: 0.1 }
+    })
+
+    expect(created).toBe(editor)
+    expect(request).toHaveBeenNthCalledWith(1, 'POST', '/image-canvas/editor-documents', expect.objectContaining({ base_asset_id: 'asset-1' }), undefined)
+    expect(request).toHaveBeenNthCalledWith(2, 'GET', '/image-canvas/editor-documents/editor%2Fid', undefined, undefined)
+    expect(request).toHaveBeenNthCalledWith(3, 'PATCH', '/image-canvas/editor-documents/editor%2Fid', expect.objectContaining({ version: 3, operation: 'crop' }), undefined)
+  })
+
+  it('uploads a derived editor asset as multipart data', async () => {
+    const request = vi.fn().mockResolvedValue({ id: 'asset-2' })
+    const host = { request } as unknown as CanvasHostContext
+    const api = createCanvasAPI(host)
+    const file = new File(['pixels'], 'crop.png', { type: 'image/png' })
+
+    await api.uploadEditorDerivedAsset('editor/id', file, 'asset-1')
+
+    expect(request).toHaveBeenCalledWith(
+      'POST',
+      '/image-canvas/editor-documents/editor%2Fid/assets',
+      expect.any(FormData),
+      undefined
+    )
+    const form = request.mock.calls[0][2] as FormData
+    expect(form.get('file')).toBe(file)
+    expect(form.get('parent_asset_id')).toBe('asset-1')
+  })
 })
