@@ -13,6 +13,16 @@ import (
 
 const imageCanvasCatalogPageSize = 1000
 
+const (
+	ImageCanvasAPIKeyUnavailableDisabled                = "key_disabled"
+	ImageCanvasAPIKeyUnavailableExpired                 = "key_expired"
+	ImageCanvasAPIKeyUnavailableQuotaExhausted          = "quota_exhausted"
+	ImageCanvasAPIKeyUnavailableGroupMissing            = "group_missing"
+	ImageCanvasAPIKeyUnavailableGroupDisabled           = "group_disabled"
+	ImageCanvasAPIKeyUnavailableImageGenerationDisabled = "image_generation_disabled"
+	ImageCanvasAPIKeyUnavailableNoImageModel            = "no_image_model"
+)
+
 // ImageModelCatalog resolves the server-authoritative image capability set.
 // It intentionally exposes no upstream account or API key credentials.
 type ImageModelCatalog interface {
@@ -80,28 +90,59 @@ func (c *imageModelCatalog) ListOwnedAPIKeys(ctx context.Context, userID int64) 
 	}
 	keys, _, err := c.apiKeys.ListByUserID(ctx, userID, pagination.PaginationParams{
 		Page: 1, PageSize: imageCanvasCatalogPageSize,
-	}, APIKeyListFilters{Status: StatusAPIKeyActive})
+	}, APIKeyListFilters{})
 	if err != nil {
 		return nil, fmt.Errorf("list image canvas api keys: %w", err)
 	}
 	result := make([]ImageCanvasAPIKey, 0, len(keys))
+	modelReasonByGroup := make(map[int64]string)
+	checkedModelGroups := make(map[int64]struct{})
 	for index := range keys {
 		key := &keys[index]
-		if !imageCanvasAPIKeyAvailable(key, userID) {
+		if key.UserID != userID {
 			continue
 		}
-		group, err := c.groupForAPIKey(ctx, key)
-		if err != nil {
-			continue
+		item := ImageCanvasAPIKey{ID: key.ID, Name: key.Name}
+		reason := imageCanvasAPIKeyUnavailableReason(key, userID)
+		var group *Group
+		if key.GroupID != nil && *key.GroupID > 0 {
+			item.GroupID = *key.GroupID
 		}
-		if !imageCanvasGroupAvailable(group) {
-			continue
+		if item.GroupID > 0 {
+			group, err = c.groupForAPIKey(ctx, key)
+			if err == nil {
+				item.GroupID = group.ID
+				item.GroupName = group.Name
+			} else if reason == "" {
+				reason = ImageCanvasAPIKeyUnavailableGroupMissing
+			}
 		}
-		result = append(result, ImageCanvasAPIKey{
-			ID: key.ID, Name: key.Name, GroupID: group.ID, GroupName: group.Name,
-		})
+		if reason == "" {
+			reason = imageCanvasGroupUnavailableReason(group)
+		}
+		if reason == "" && c.accounts != nil {
+			groupReason := modelReasonByGroup[group.ID]
+			if _, ok := checkedModelGroups[group.ID]; !ok {
+				accounts, listErr := c.accounts.ListSchedulableByGroupID(ctx, group.ID)
+				if listErr != nil {
+					return nil, fmt.Errorf("list schedulable image accounts for group %d: %w", group.ID, listErr)
+				}
+				if len(filterImageCanvasModelsForGroup(c.capabilitiesForAccounts(accounts), group)) == 0 {
+					groupReason = ImageCanvasAPIKeyUnavailableNoImageModel
+				}
+				modelReasonByGroup[group.ID] = groupReason
+				checkedModelGroups[group.ID] = struct{}{}
+			}
+			reason = groupReason
+		}
+		item.Available = reason == ""
+		item.UnavailableReason = reason
+		result = append(result, item)
 	}
 	sort.Slice(result, func(left, right int) bool {
+		if result[left].Available != result[right].Available {
+			return result[left].Available
+		}
 		if result[left].Name == result[right].Name {
 			return result[left].ID < result[right].ID
 		}
@@ -213,12 +254,43 @@ func applyImageModelRuntimeOverrides(capabilities map[string]ImageModelCapabilit
 }
 
 func imageCanvasAPIKeyAvailable(key *APIKey, userID int64) bool {
-	return key != nil && key.ID > 0 && key.UserID == userID && key.Status == StatusAPIKeyActive &&
-		!key.IsExpired() && !key.IsQuotaExhausted() && key.GroupID != nil && *key.GroupID > 0
+	return imageCanvasAPIKeyUnavailableReason(key, userID) == ""
 }
 
 func imageCanvasGroupAvailable(group *Group) bool {
-	return group != nil && group.ID > 0 && group.Status == StatusActive && GroupAllowsImageGeneration(group)
+	return imageCanvasGroupUnavailableReason(group) == ""
+}
+
+func imageCanvasAPIKeyUnavailableReason(key *APIKey, userID int64) string {
+	if key == nil || key.ID <= 0 || key.UserID != userID {
+		return ImageCanvasAPIKeyUnavailableDisabled
+	}
+	if key.Status == StatusAPIKeyExpired || key.IsExpired() {
+		return ImageCanvasAPIKeyUnavailableExpired
+	}
+	if key.Status == StatusAPIKeyQuotaExhausted || key.IsQuotaExhausted() {
+		return ImageCanvasAPIKeyUnavailableQuotaExhausted
+	}
+	if key.Status != StatusAPIKeyActive {
+		return ImageCanvasAPIKeyUnavailableDisabled
+	}
+	if key.GroupID == nil || *key.GroupID <= 0 {
+		return ImageCanvasAPIKeyUnavailableGroupMissing
+	}
+	return ""
+}
+
+func imageCanvasGroupUnavailableReason(group *Group) string {
+	if group == nil || group.ID <= 0 {
+		return ImageCanvasAPIKeyUnavailableGroupMissing
+	}
+	if group.Status != StatusActive {
+		return ImageCanvasAPIKeyUnavailableGroupDisabled
+	}
+	if !GroupAllowsImageGeneration(group) {
+		return ImageCanvasAPIKeyUnavailableImageGenerationDisabled
+	}
+	return ""
 }
 
 func filterImageCanvasModelsForGroup(models map[string]ImageModelCapability, group *Group) map[string]ImageModelCapability {

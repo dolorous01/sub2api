@@ -165,6 +165,10 @@ export function normalizeImageQuickToolIds(value: unknown[]) {
     return allIds.filter((id) => value.includes(id) && ids.has(id));
 }
 
+export function shouldShowImageToolLabel(id: ImageQuickToolId, showAllLabels: boolean) {
+    return showAllLabels || id === "focusedEdit";
+}
+
 export function readImageQuickToolsConfig(value: unknown): ImageQuickToolsConfig {
     if (Array.isArray(value)) return { ids: normalizeImageQuickToolIds(value), showLabels: false };
     if (!value || typeof value !== "object") return { ids: defaultImageQuickToolIds, showLabels: false };

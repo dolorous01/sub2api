@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { nanoid } from "nanoid";
 
 import i18n from "@/i18n";
-import { createCanvasAPI, type CanvasCapability, type CanvasConfig } from "@sub2api/api/canvas-api";
+import { createCanvasAPI, type CanvasAPIKey, type CanvasCapability, type CanvasConfig } from "@sub2api/api/canvas-api";
 import { getCanvasRuntimeHost } from "@sub2api/runtime/host-runtime";
 import { useCanvasSessionStore } from "@sub2api/stores/canvas-session-store";
 
@@ -107,6 +107,9 @@ export const defaultWebdavSyncConfig: WebdavSyncConfig = {
 
 type ConfigStore = {
     config: AiConfig;
+    canvasConfig?: CanvasConfig;
+    canvasConfigLoading: boolean;
+    canvasConfigError: string;
     webdav: WebdavSyncConfig;
     isConfigOpen: boolean;
     configTab: ConfigTabKey;
@@ -180,10 +183,14 @@ function isAiConfigReady(config: AiConfig, model: string) {
 const blockedConfigKeys = new Set<keyof AiConfig>(["apiKey", "baseUrl", "channels", "channelMode", "apiFormat", "models"]);
 let selectedAPIKeyID: number | undefined;
 let configInitialization: Promise<void> | undefined;
+let configInitializationVersion = 0;
 const capabilitiesByModel = new Map<string, CanvasCapability>();
 
 export const useConfigStore = create<ConfigStore>()((set) => ({
     config: { ...defaultConfig, ...readSafePreferences() },
+    canvasConfig: undefined,
+    canvasConfigLoading: false,
+    canvasConfigError: "",
     webdav: defaultWebdavSyncConfig,
     isConfigOpen: false,
     configTab: "channels",
@@ -206,30 +213,49 @@ export const useConfigStore = create<ConfigStore>()((set) => ({
 
 export function initializeCanvasConfigStore(preferredAPIKeyID?: number): Promise<void> {
     if (configInitialization && preferredAPIKeyID === undefined) return configInitialization;
+    const initializationVersion = ++configInitializationVersion;
+    useConfigStore.setState({ canvasConfigLoading: true, canvasConfigError: "" });
     configInitialization = (async () => {
         const canvasAPI = createCanvasAPI(getCanvasRuntimeHost());
         const summary = await canvasAPI.getConfig();
-        const saved = preferredAPIKeyID || useCanvasSessionStore.getState().apiKeyID;
-        const apiKeyID = summary.api_keys.some((item) => item.id === saved) ? saved : summary.api_keys[0]?.id;
-        selectedAPIKeyID = apiKeyID;
+        if (initializationVersion !== configInitializationVersion) return;
+        useConfigStore.setState({ canvasConfig: summary });
+        const saved = preferredAPIKeyID ?? useCanvasSessionStore.getState().apiKeyID;
+        const apiKeyID = resolvePreferredCanvasAPIKeyID(summary.api_keys, saved);
         if (!apiKeyID) {
-            useConfigStore.setState((state) => ({ config: { ...state.config, channels: [], models: [], model: "", imageModel: "", videoModel: "", textModel: "", audioModel: "" } }));
+            selectedAPIKeyID = undefined;
+            capabilitiesByModel.clear();
+            useCanvasSessionStore.getState().clear();
+            useConfigStore.setState((state) => ({
+                canvasConfig: summary,
+                canvasConfigLoading: false,
+                config: { ...state.config, channels: [], models: [], model: "", imageModel: "", videoModel: "", textModel: "", audioModel: "" },
+            }));
             return;
         }
         const serverConfig = await canvasAPI.getConfig(apiKeyID);
+        if (initializationVersion !== configInitializationVersion) return;
         applyServerConfig(serverConfig, apiKeyID);
     })().catch((error) => {
-        getCanvasRuntimeHost().notify("error", error instanceof Error ? error.message : "Canvas configuration could not be loaded");
+        if (initializationVersion !== configInitializationVersion) return;
+        configInitialization = undefined;
+        const message = error instanceof Error ? error.message : "Canvas configuration could not be loaded";
+        useConfigStore.setState({ canvasConfigLoading: false, canvasConfigError: message });
+        getCanvasRuntimeHost().notify("error", message);
     });
     return configInitialization;
 }
 
 export function resetCanvasConfigStore(): void {
+    configInitializationVersion += 1;
     selectedAPIKeyID = undefined;
     configInitialization = undefined;
     capabilitiesByModel.clear();
     useConfigStore.setState((state) => ({
         config: { ...defaultConfig, ...readSafePreferences() },
+        canvasConfig: undefined,
+        canvasConfigLoading: false,
+        canvasConfigError: "",
         webdav: defaultWebdavSyncConfig,
         isConfigOpen: false,
         shouldPromptContinue: false,
@@ -247,6 +273,11 @@ export function getCanvasModelCapability(model: string): CanvasCapability | unde
 
 export function selectCanvasAPIKey(apiKeyID: number): Promise<void> {
     return initializeCanvasConfigStore(apiKeyID);
+}
+
+export function resolvePreferredCanvasAPIKeyID(apiKeys: CanvasAPIKey[], preferred?: number): number | undefined {
+    const availableKeys = apiKeys.filter((item) => item.available !== false);
+    return availableKeys.some((item) => item.id === preferred) ? preferred : availableKeys[0]?.id;
 }
 
 export function useEffectiveConfig() {
@@ -408,6 +439,7 @@ const safePreferenceKeys: Array<keyof AiConfig> = [
 function applyServerConfig(serverConfig: CanvasConfig, apiKeyID: number): void {
     const current = useConfigStore.getState().config;
     const apiKey = serverConfig.api_keys.find((item) => item.id === apiKeyID);
+    selectedAPIKeyID = apiKeyID;
     capabilitiesByModel.clear();
     serverConfig.models.forEach((item) => capabilitiesByModel.set(item.model, item.capability));
     const channel: ModelChannel = {
@@ -436,6 +468,9 @@ function applyServerConfig(serverConfig: CanvasConfig, apiKeyID: number): void {
     const audioModel = pick("audio", current.audioModel);
     const model = imageModel || videoModel || textModel || audioModel;
     useConfigStore.setState({
+        canvasConfig: serverConfig,
+        canvasConfigLoading: false,
+        canvasConfigError: "",
         config: {
             ...current,
             channelMode: "local",

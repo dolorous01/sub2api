@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -103,6 +104,7 @@ func TestImageModelCatalogFiltersPolicyByOwnedAPIKeyGroup(t *testing.T) {
 func TestImageModelCatalogListsRedactedAvailableKeys(t *testing.T) {
 	groupID := int64(3)
 	group := &Group{ID: groupID, Name: "images", Status: StatusActive, AllowImageGeneration: true}
+	account := Account{ID: 7, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true}
 	keys := []APIKey{
 		{ID: 42, UserID: 9, Key: "sk-secret", Name: "zeta", GroupID: &groupID, Group: group, Status: StatusAPIKeyActive},
 		{ID: 43, UserID: 9, Key: "sk-disabled", Name: "disabled", GroupID: &groupID, Group: group, Status: StatusAPIKeyDisabled},
@@ -110,13 +112,70 @@ func TestImageModelCatalogListsRedactedAvailableKeys(t *testing.T) {
 	catalog := NewImageModelCatalog(
 		imageModelCatalogAPIKeyRepo{keys: keys},
 		imageModelCatalogGroupRepo{groups: map[int64]*Group{groupID: group}},
+		imageModelCatalogAccountRepo{byGroup: map[int64][]Account{groupID: {account}}},
+		nil,
+	)
+
+	got, err := catalog.ListOwnedAPIKeys(context.Background(), 9)
+	require.NoError(t, err)
+	require.Equal(t, []ImageCanvasAPIKey{
+		{ID: 42, Name: "zeta", GroupID: 3, GroupName: "images", Available: true},
+		{ID: 43, Name: "disabled", GroupID: 3, GroupName: "images", Available: false, UnavailableReason: ImageCanvasAPIKeyUnavailableDisabled},
+	}, got)
+}
+
+func TestImageModelCatalogExplainsUnavailableOwnedKeys(t *testing.T) {
+	imageGroupID := int64(3)
+	blockedGroupID := int64(4)
+	imageGroup := &Group{ID: imageGroupID, Name: "images", Status: StatusActive, AllowImageGeneration: true}
+	blockedGroup := &Group{ID: blockedGroupID, Name: "text only", Status: StatusActive, AllowImageGeneration: false}
+	keys := []APIKey{
+		{ID: 42, UserID: 9, Name: "no account", GroupID: &imageGroupID, Group: imageGroup, Status: StatusAPIKeyActive},
+		{ID: 43, UserID: 9, Name: "text key", GroupID: &blockedGroupID, Group: blockedGroup, Status: StatusAPIKeyActive},
+		{ID: 44, UserID: 9, Name: "ungrouped", Status: StatusAPIKeyActive},
+	}
+	catalog := NewImageModelCatalog(
+		imageModelCatalogAPIKeyRepo{keys: keys},
+		imageModelCatalogGroupRepo{groups: map[int64]*Group{imageGroupID: imageGroup, blockedGroupID: blockedGroup}},
 		imageModelCatalogAccountRepo{},
 		nil,
 	)
 
 	got, err := catalog.ListOwnedAPIKeys(context.Background(), 9)
 	require.NoError(t, err)
-	require.Equal(t, []ImageCanvasAPIKey{{ID: 42, Name: "zeta", GroupID: 3, GroupName: "images"}}, got)
+	require.Len(t, got, 3)
+	require.Equal(t, ImageCanvasAPIKeyUnavailableNoImageModel, got[0].UnavailableReason)
+	require.Equal(t, ImageCanvasAPIKeyUnavailableImageGenerationDisabled, got[1].UnavailableReason)
+	require.Equal(t, ImageCanvasAPIKeyUnavailableGroupMissing, got[2].UnavailableReason)
+}
+
+func TestImageCanvasAPIKeyUnavailableReasons(t *testing.T) {
+	groupID := int64(3)
+	past := time.Now().Add(-time.Hour)
+	tests := []struct {
+		name string
+		key  *APIKey
+		want string
+	}{
+		{name: "disabled", key: &APIKey{ID: 1, UserID: 9, Status: StatusAPIKeyDisabled, GroupID: &groupID}, want: ImageCanvasAPIKeyUnavailableDisabled},
+		{name: "expired status", key: &APIKey{ID: 1, UserID: 9, Status: StatusAPIKeyExpired, GroupID: &groupID}, want: ImageCanvasAPIKeyUnavailableExpired},
+		{name: "expired timestamp", key: &APIKey{ID: 1, UserID: 9, Status: StatusAPIKeyActive, GroupID: &groupID, ExpiresAt: &past}, want: ImageCanvasAPIKeyUnavailableExpired},
+		{name: "quota status", key: &APIKey{ID: 1, UserID: 9, Status: StatusAPIKeyQuotaExhausted, GroupID: &groupID}, want: ImageCanvasAPIKeyUnavailableQuotaExhausted},
+		{name: "quota usage", key: &APIKey{ID: 1, UserID: 9, Status: StatusAPIKeyActive, GroupID: &groupID, Quota: 1, QuotaUsed: 1}, want: ImageCanvasAPIKeyUnavailableQuotaExhausted},
+		{name: "missing group", key: &APIKey{ID: 1, UserID: 9, Status: StatusAPIKeyActive}, want: ImageCanvasAPIKeyUnavailableGroupMissing},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.want, imageCanvasAPIKeyUnavailableReason(test.key, 9))
+		})
+	}
+}
+
+func TestImageCanvasGroupUnavailableReasons(t *testing.T) {
+	require.Equal(t, ImageCanvasAPIKeyUnavailableGroupMissing, imageCanvasGroupUnavailableReason(nil))
+	require.Equal(t, ImageCanvasAPIKeyUnavailableGroupDisabled, imageCanvasGroupUnavailableReason(&Group{ID: 3, Status: StatusDisabled}))
+	require.Equal(t, ImageCanvasAPIKeyUnavailableImageGenerationDisabled, imageCanvasGroupUnavailableReason(&Group{ID: 3, Status: StatusActive, AllowImageGeneration: false}))
+	require.Empty(t, imageCanvasGroupUnavailableReason(&Group{ID: 3, Status: StatusActive, AllowImageGeneration: true}))
 }
 
 func TestAccountImageCanvasModelCatalogRequiresNativeImageAccount(t *testing.T) {

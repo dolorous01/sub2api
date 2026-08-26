@@ -408,6 +408,7 @@ export default {
     groups: 'Groups',
     channels: 'Channels',
     imageCanvas: 'Studio',
+    imageModelSettings: 'Image Model Settings',
     availableChannels: 'Available Channels',
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
@@ -1472,8 +1473,8 @@ export default {
   // Admin
   admin: {
     imageCanvas: {
-      title: 'Image Canvas',
-      description: 'Manage the image canvas model chain, runtime policy, and workspace',
+      title: 'Image Model Settings',
+      description: 'Manage the Studio image model chain and runtime policy',
       policyTab: 'Model chain',
       runtimeTab: 'Runtime policy',
       openStudio: 'Open Studio',

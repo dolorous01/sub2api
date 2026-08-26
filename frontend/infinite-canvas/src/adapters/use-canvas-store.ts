@@ -470,6 +470,20 @@ export function getActiveCanvasProjectID(): string | undefined {
   return activeProjectID
 }
 
+export function mostRecentCanvasProject(projects: readonly CanvasProject[]): CanvasProject | undefined {
+  let latest: CanvasProject | undefined
+  let latestTimestamp = Number.NEGATIVE_INFINITY
+  for (const project of projects) {
+    const parsed = Date.parse(project.updatedAt)
+    const timestamp = Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY
+    if (!latest || timestamp > latestTimestamp) {
+      latest = project
+      latestTimestamp = timestamp
+    }
+  }
+  return latest
+}
+
 export function isCanvasRecoveryActive(nodeID: string, imageID?: string): boolean {
   if (!activeProjectID) return false
   return (recoveriesByProject.get(activeProjectID) || []).some((binding) => {

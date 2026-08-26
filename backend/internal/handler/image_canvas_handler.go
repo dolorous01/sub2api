@@ -165,7 +165,7 @@ func (h *ImageCanvasHandler) GetConfig(c *gin.Context) {
 		return
 	}
 	result := ImageCanvasConfigResponse{
-		Enabled: true, APIKeys: keys, PolicyVersion: policy.Version,
+		Enabled: policy.Enabled, APIKeys: keys, PolicyVersion: policy.Version,
 		Models: make([]service.ImageModelPolicyItem, 0),
 	}
 	if raw := strings.TrimSpace(c.Query("api_key_id")); raw != "" {

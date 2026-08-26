@@ -408,6 +408,7 @@ export default {
     groups: '分组管理',
     channels: '渠道管理',
     imageCanvas: '创作工作台',
+    imageModelSettings: '图片模型设置',
     availableChannels: '可用渠道',
     subscriptions: '订阅管理',
     accounts: '账号管理',
@@ -1476,8 +1477,8 @@ export default {
   // Admin
   admin: {
     imageCanvas: {
-      title: '图片画布',
-      description: '管理图片画布的模型链、运行策略与工作区',
+      title: '图片模型设置',
+      description: '管理创作工作台的图片模型链与运行策略',
       policyTab: '模型链',
       runtimeTab: '运行策略',
       openStudio: '打开创作工作台',

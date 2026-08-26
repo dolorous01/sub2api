@@ -30,3 +30,10 @@ describe('AppSidebar header styles', () => {
     expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
   })
 })
+
+describe('AppSidebar Studio labels', () => {
+  it('uses a distinct label for image model administration', () => {
+    expect(componentSource).toContain("{ path: '/studio', label: t('nav.imageCanvas')")
+    expect(componentSource).toContain("{ path: '/admin/images', label: t('nav.imageModelSettings')")
+  })
+})

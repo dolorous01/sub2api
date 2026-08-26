@@ -145,10 +145,12 @@ type ImageModelPolicyAudit struct {
 // ImageCanvasAPIKey is the intentionally redacted API key shape exposed to
 // the canvas. It must never grow a key, prefix, hash, or credential field.
 type ImageCanvasAPIKey struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	GroupID   int64  `json:"group_id"`
-	GroupName string `json:"group_name"`
+	ID                int64  `json:"id"`
+	Name              string `json:"name"`
+	GroupID           int64  `json:"group_id"`
+	GroupName         string `json:"group_name"`
+	Available         bool   `json:"available"`
+	UnavailableReason string `json:"unavailable_reason,omitempty"`
 }
 
 type ImageCanvasProject struct {

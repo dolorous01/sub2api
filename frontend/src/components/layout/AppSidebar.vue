@@ -791,7 +791,7 @@ const adminNavItems = computed((): NavItem[] => {
     }
     return filtered
   }
-  visible.push({ path: '/admin/images', label: t('nav.imageCanvas'), icon: FolderIcon })
+  visible.push({ path: '/admin/images', label: t('nav.imageModelSettings'), icon: FolderIcon })
 
   visible.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
   for (const cm of customMenuItemsForAdmin.value) {

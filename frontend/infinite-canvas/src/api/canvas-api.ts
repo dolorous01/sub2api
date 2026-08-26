@@ -56,6 +56,8 @@ export interface CanvasAPIKey {
   name: string
   group_id: number
   group_name: string
+  available?: boolean
+  unavailable_reason?: 'key_disabled' | 'key_expired' | 'quota_exhausted' | 'group_missing' | 'group_disabled' | 'image_generation_disabled' | 'no_image_model'
 }
 
 export interface CanvasModel {

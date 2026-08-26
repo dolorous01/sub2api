@@ -30,10 +30,12 @@ vi.mock('@sub2api/runtime/host-runtime', () => ({
 import {
   initializeCanvasProjectStore,
   isCanvasRecoveryActive,
+  mostRecentCanvasProject,
   registerCanvasTaskRecovery,
   resetCanvasProjectStore,
   scheduleCanvasTaskRecoveryCleanup,
-  useCanvasStore
+  useCanvasStore,
+  type CanvasProject
 } from './use-canvas-store'
 
 function serverProject(status: 'running' | 'completed') {
@@ -71,6 +73,33 @@ function serverProject(status: 'running' | 'completed') {
     }]
   }
 }
+
+function localProject(id: string, updatedAt: string): CanvasProject {
+  return {
+    id,
+    title: id,
+    createdAt: '2026-08-20T00:00:00Z',
+    updatedAt,
+    nodes: [],
+    connections: [],
+    chatSessions: [],
+    activeChatId: null,
+    backgroundMode: 'lines',
+    showImageInfo: false,
+    viewport: { x: 0, y: 0, k: 1 },
+    recoveryRevision: 0,
+    recoveries: []
+  }
+}
+
+describe('mostRecentCanvasProject', () => {
+  it('uses the current update timestamp instead of array order', () => {
+    const older = localProject('older', '2026-08-25T10:00:00Z')
+    const newer = localProject('newer', '2026-08-26T10:00:00Z')
+
+    expect(mostRecentCanvasProject([older, newer])?.id).toBe('newer')
+  })
+})
 
 describe('canvas project recovery store', () => {
   beforeEach(() => {

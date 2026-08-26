@@ -75,7 +75,7 @@ function CanvasRuntime({ mountElement }: { mountElement: HTMLElement }) {
         )
       },
       { path: '*', element: <Navigate to="/canvas" replace /> }
-    ], { initialEntries: ['/canvas'] }),
+    ], { initialEntries: ['/canvas?mode=recent'] }),
     []
   )
 
