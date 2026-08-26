@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { join, relative, resolve, sep } from 'node:path'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
-const expected = '3088fe48b361f079728c153bcb25a7053f01a62ae6105fcf03a505bd3344a06d'
+const expected = '44551ba0cc17e3febdd56dbb6c773e2f6762f29749888f092caefd6a93aa7bc0'
 const files = []
 
 collect(resolve(root, 'src/upstream'), 'src')
