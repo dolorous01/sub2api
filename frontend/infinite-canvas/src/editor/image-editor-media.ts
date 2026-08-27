@@ -84,10 +84,31 @@ export async function createOutpaintFiles(imageURL: string, targetRatio: number)
 }
 
 export async function imageFileFromURL(url: string, fileName: string): Promise<File> {
+  if (/^data:/i.test(url)) return imageFileFromDataURL(url, fileName)
   const response = await fetch(url)
   if (!response.ok) throw new Error('Image could not be read')
   const blob = await response.blob()
   return new File([blob], fileName, { type: blob.type || 'image/png' })
+}
+
+function imageFileFromDataURL(url: string, fileName: string): File {
+  const separator = url.indexOf(',')
+  if (separator < 5) throw new Error('Image could not be read')
+
+  const metadata = url.slice(5, separator).split(';')
+  const mimeType = metadata[0] || 'image/png'
+  const payload = url.slice(separator + 1)
+  try {
+    if (!metadata.some((value) => value.toLowerCase() === 'base64')) {
+      return new File([decodeURIComponent(payload)], fileName, { type: mimeType })
+    }
+    const binary = atob(payload.replace(/\s/g, ''))
+    const bytes = new Uint8Array(binary.length)
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+    return new File([bytes], fileName, { type: mimeType })
+  } catch {
+    throw new Error('Image could not be read')
+  }
 }
 
 function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
