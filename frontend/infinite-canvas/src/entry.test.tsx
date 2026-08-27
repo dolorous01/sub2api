@@ -71,6 +71,7 @@ describe('mountCanvas', () => {
       handle = mountCanvas(element, hostContext())
     })
     expect(element.querySelector('[data-canvas-test-root]')).not.toBeNull()
+    expect(element.querySelector('.sub2api-canvas-app')).not.toBeNull()
 
     await act(async () => {
       handle.updateContext({ ...hostContext(), locale: 'zh-CN', theme: 'dark' })

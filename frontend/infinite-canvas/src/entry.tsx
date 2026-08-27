@@ -28,6 +28,7 @@ import { getAntThemeConfig } from '@/lib/app-theme'
 import { useThemeStore } from '@/stores/use-theme-store'
 import 'antd/dist/reset.css'
 import 'streamdown/styles.css'
+import '@sub2api/styles/sub2api-canvas.css'
 import '@/styles/globals.css'
 
 const FocusedImageEditor = lazy(() => import('@sub2api/editor/focused-image-editor'))
@@ -51,7 +52,10 @@ function CanvasProviders({ children, mountElement }: { children: ReactNode; moun
       getPopupContainer={() => mountElement}
     >
       <ProConfigProvider dark={dark}>
-        <App>
+        <App
+          className="sub2api-canvas-app h-full min-h-0"
+          style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}
+        >
           <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
         </App>
       </ProConfigProvider>

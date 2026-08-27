@@ -78,10 +78,10 @@ export function CanvasAPIKeyMenu({ showLabel = true }: { showLabel?: boolean }) 
                 <Button
                     type="text"
                     aria-label={t("canvas.apiKeys.select")}
-                    className="!h-9 !max-w-[220px] !rounded-lg !px-2.5"
+                    className="canvas-api-key-trigger !h-9 !max-w-[220px] !rounded-lg !px-2.5"
                     icon={busy ? <LoaderCircle className="size-4 animate-spin" /> : !config?.enabled ? <TriangleAlert className="size-4 text-amber-500" /> : <KeyRound className="size-4" />}
                 >
-                    {showLabel ? <span className="max-w-36 truncate">{selected?.name || t("canvas.apiKeys.select")}</span> : null}
+                    {showLabel ? <span className="canvas-api-key-label max-w-36 truncate">{selected?.name || t("canvas.apiKeys.select")}</span> : null}
                 </Button>
             </Dropdown>
         </Tooltip>

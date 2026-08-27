@@ -15,6 +15,14 @@
   min-height: 0;
 }
 
+.sub2api-canvas-app {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
 .sub2api-canvas-root {
   --canvas-bg: #eef1f2;
   --panel-bg: #ffffff;
@@ -97,6 +105,13 @@
 .sub2api-canvas-root :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+.canvas-api-key-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .canvas-workspace {
@@ -1266,6 +1281,10 @@
     bottom: 58px;
     left: 6px;
     width: auto;
+  }
+
+  .canvas-api-key-label {
+    display: none;
   }
 
   .generation-header {
