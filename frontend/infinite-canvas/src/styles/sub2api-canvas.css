@@ -10,7 +10,7 @@
 }
 
 .sub2api-canvas-mount,
-.sub2api-canvas-mount > * {
+.sub2api-canvas-mount > .sub2api-canvas-app {
   height: 100%;
   min-height: 0;
 }
@@ -1340,6 +1340,10 @@
     position: absolute;
     inset: 0 auto 0 0;
     z-index: 70;
+  }
+
+  .canvas-project-main > .canvas-side-panel-shell > aside {
+    padding-top: 100px;
   }
 
   .canvas-project-main > .canvas-project-stage {
