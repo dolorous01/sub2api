@@ -114,6 +114,74 @@
   white-space: nowrap;
 }
 
+.canvas-top-bar {
+  height: 64px;
+  align-items: flex-start;
+  gap: 6px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.canvas-project-main {
+  container-name: canvas-main;
+  container-type: inline-size;
+  position: relative;
+}
+
+.canvas-project-stage {
+  container-name: canvas-stage;
+  container-type: inline-size;
+}
+
+.canvas-top-bar-left,
+.canvas-top-bar-right {
+  min-width: 0;
+}
+
+.canvas-top-bar-left {
+  flex: 1 1 auto;
+  min-height: 40px;
+}
+
+.canvas-top-bar-right {
+  flex: 0 1 auto;
+  min-height: 40px;
+  justify-content: flex-end;
+}
+
+.canvas-top-bar-title {
+  max-width: min(280px, 24vw);
+  overflow: hidden;
+}
+
+.canvas-top-bar-title > button,
+.canvas-top-bar-title > input {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.canvas-compact-agent-status {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.canvas-top-bar-agent {
+  flex: 0 0 auto;
+}
+
+.canvas-top-bar-agent-label {
+  white-space: nowrap;
+}
+
+.canvas-action-version {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.canvas-top-bar {
+  z-index: 80;
+}
+
 .canvas-workspace {
   position: absolute;
   inset: 0;
@@ -1182,7 +1250,45 @@
   gap: 8px;
 }
 
+@container canvas-stage (max-width: 1360px) {
+  .canvas-top-bar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 64px;
+  }
+
+  .canvas-top-bar-left,
+  .canvas-top-bar-right {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .canvas-top-bar-left {
+    flex: 0 1 auto;
+  }
+
+  .canvas-top-bar-right {
+    flex: 0 1 auto;
+    justify-content: flex-end;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .canvas-top-bar-right::-webkit-scrollbar {
+    display: none;
+  }
+
+  .canvas-top-bar-title {
+    max-width: min(220px, 40vw);
+  }
+
+  .canvas-compact-agent-status {
+    display: none;
+  }
+}
+
 @media (max-width: 1100px) {
+
   .generation-panel {
     width: 332px;
   }
@@ -1194,6 +1300,61 @@
   .save-state {
     min-width: 34px;
     font-size: 0;
+  }
+}
+
+@container canvas-main (max-width: 900px) {
+  .canvas-top-bar {
+    right: 8px;
+    left: 8px;
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .canvas-top-bar-left {
+    min-height: 36px;
+  }
+
+  .canvas-top-bar-right {
+    justify-content: flex-start;
+    min-height: 36px;
+    padding-bottom: 2px;
+  }
+
+  .canvas-top-bar-title {
+    max-width: min(180px, 42vw);
+  }
+
+  .canvas-top-bar-agent {
+    width: 36px !important;
+    min-width: 36px !important;
+    padding-right: 0 !important;
+    padding-left: 0 !important;
+  }
+
+  .canvas-top-bar-agent-label {
+    display: none;
+  }
+
+  .canvas-project-main > .canvas-side-panel-shell {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 70;
+  }
+
+  .canvas-project-main > .canvas-project-stage {
+    width: 100%;
+  }
+
+  .canvas-top-bar-right .canvas-action-docs,
+  .canvas-top-bar-right .canvas-action-version,
+  .canvas-top-bar-right .canvas-action-github {
+    display: none;
+  }
+
+  .canvas-api-key-label {
+    display: inline;
+    max-width: 120px;
   }
 }
 
@@ -1281,10 +1442,6 @@
     bottom: 58px;
     left: 6px;
     width: auto;
-  }
-
-  .canvas-api-key-label {
-    display: none;
   }
 
   .generation-header {
