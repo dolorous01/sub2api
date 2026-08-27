@@ -928,6 +928,35 @@
       </template>
     </BaseDialog>
 
+    <!-- Newly created keys must be acknowledged before returning to the caller. -->
+    <BaseDialog
+      :show="Boolean(createdKey)"
+      :title="t('keys.createdKeyTitle')"
+      width="normal"
+      :show-close-button="false"
+      :close-on-escape="false"
+    >
+      <div v-if="createdKey" class="space-y-4">
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+          <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
+            {{ t('keys.createdKeyWarning') }}
+          </p>
+        </div>
+        <code class="block select-all break-all rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 font-mono text-sm text-gray-900 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-100">
+          {{ createdKey.key }}
+        </code>
+        <button type="button" class="btn btn-secondary w-full" data-test="copy-created-key" @click="copyCreatedKey">
+          <Icon :name="createdKeyCopied ? 'check' : 'clipboard'" size="sm" />
+          {{ createdKeyCopied ? t('keys.copied') : t('keys.copyCreatedKey') }}
+        </button>
+      </div>
+      <template #footer>
+        <button type="button" class="btn btn-primary" data-test="finish-created-key" @click="finishCreatedKey">
+          {{ createdKeyReturnTo ? t('keys.continueToStudio') : t('keys.createdKeyDone') }}
+        </button>
+      </template>
+    </BaseDialog>
+
     <!-- Delete Confirmation Dialog -->
     <ConfirmDialog
       :show="showDeleteDialog"
@@ -1095,6 +1124,7 @@
 <script setup lang="ts">
 	import { ref, reactive, computed, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
 	import { useI18n } from 'vue-i18n'
+	import { useRoute, useRouter } from 'vue-router'
 	import { useAppStore } from '@/stores/app'
 	import { useOnboardingStore } from '@/stores/onboarding'
 	import { useClipboard } from '@/composables/useClipboard'
@@ -1150,6 +1180,12 @@ interface GroupOption {
 const appStore = useAppStore()
 const onboardingStore = useOnboardingStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
+const route = useRoute()
+const router = useRouter()
+const returnTo = computed(() => {
+  const value = route.query.returnTo
+  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') ? value : ''
+})
 
 const allColumns = computed<Column[]>(() => [
   { key: 'name', label: t('common.name'), sortable: true },
@@ -1258,6 +1294,9 @@ const showResetRateLimitDialog = ref(false)
 const showUseKeyModal = ref(false)
 const showCcsClientSelect = ref(false)
 const showColumnDropdown = ref(false)
+const createdKey = ref<ApiKey | null>(null)
+const createdKeyReturnTo = ref('')
+const createdKeyCopied = ref(false)
 const pendingCcsRow = ref<ApiKey | null>(null)
 const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
@@ -1689,7 +1728,7 @@ const handleSubmit = async () => {
       appStore.showSuccess(t('keys.keyUpdatedSuccess'))
     } else {
       const customKey = formData.value.use_custom_key ? formData.value.custom_key : undefined
-      await keysAPI.create(
+      const result = await keysAPI.create(
         formData.value.name,
         formData.value.group_id,
         customKey,
@@ -1699,6 +1738,9 @@ const handleSubmit = async () => {
         expiresInDays,
         rateLimitData
       )
+      createdKey.value = result
+      createdKeyReturnTo.value = returnTo.value
+      createdKeyCopied.value = false
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
       if (onboardingStore.isCurrentStep('[data-tour="key-form-submit"]')) {
@@ -1706,7 +1748,7 @@ const handleSubmit = async () => {
       }
     }
     closeModals()
-    loadApiKeys()
+    if (!createdKey.value) loadApiKeys()
   } catch (error: any) {
     const errorMsg = error.response?.data?.detail || t('keys.failedToSave')
     appStore.showError(errorMsg)
@@ -1714,6 +1756,23 @@ const handleSubmit = async () => {
   } finally {
     submitting.value = false
   }
+}
+
+const copyCreatedKey = async () => {
+  if (!createdKey.value) return
+  createdKeyCopied.value = await clipboardCopy(createdKey.value.key, t('keys.copied'))
+}
+
+const finishCreatedKey = async () => {
+  const target = createdKeyReturnTo.value
+  createdKey.value = null
+  createdKeyReturnTo.value = ''
+  createdKeyCopied.value = false
+  if (target) {
+    await router.push(target)
+    return
+  }
+  await loadApiKeys()
 }
 
 /**
@@ -1907,6 +1966,7 @@ function formatResetTime(resetAt: string | null): string {
 }
 
 onMounted(() => {
+  if (route.query.create === '1') showCreateModal.value = true
   loadSavedColumns()
   loadApiKeys()
   loadGroups()

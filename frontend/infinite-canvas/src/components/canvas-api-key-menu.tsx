@@ -7,6 +7,7 @@ import { useCanvasHost } from "@sub2api/host-context";
 import { selectCanvasAPIKey, useConfigStore } from "@sub2api/adapters/use-config-store";
 import { useCanvasSessionStore } from "@sub2api/stores/canvas-session-store";
 import type { CanvasAPIKey } from "@sub2api/api/canvas-api";
+import { canvasAPIKeyManagementPath } from "./canvas-api-key-navigation";
 
 export function CanvasAPIKeyMenu({ showLabel = true }: { showLabel?: boolean }) {
     const { t } = useTranslation();
@@ -55,7 +56,7 @@ export function CanvasAPIKeyMenu({ showLabel = true }: { showLabel?: boolean }) 
 
     const onClick: MenuProps["onClick"] = async ({ key }) => {
         if (key === "manage") {
-            host.navigate("/keys");
+            host.navigate(canvasAPIKeyManagementPath());
             return;
         }
         if (!key.startsWith("key:")) return;

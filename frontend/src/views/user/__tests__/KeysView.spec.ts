@@ -7,6 +7,7 @@ import KeysView from '../KeysView.vue'
 
 const {
   listKeys,
+  createKey,
   getPublicSettings,
   getDashboardApiKeysUsage,
   getAvailableGroups,
@@ -16,8 +17,11 @@ const {
   copyToClipboard,
   isCurrentStep,
   nextStep,
+  routerPush,
+  routeState,
 } = vi.hoisted(() => ({
   listKeys: vi.fn(),
+  createKey: vi.fn(),
   getPublicSettings: vi.fn(),
   getDashboardApiKeysUsage: vi.fn(),
   getAvailableGroups: vi.fn(),
@@ -27,7 +31,18 @@ const {
   copyToClipboard: vi.fn(),
   isCurrentStep: vi.fn(),
   nextStep: vi.fn(),
+  routerPush: vi.fn(),
+  routeState: { query: {} as Record<string, string> },
 }))
+
+vi.mock('vue-router', async () => {
+  const actual = await vi.importActual<typeof import('vue-router')>('vue-router')
+  return {
+    ...actual,
+    useRoute: () => routeState,
+    useRouter: () => ({ push: routerPush }),
+  }
+})
 
 const messages: Record<string, string> = {
   'common.actions': 'Actions',
@@ -39,7 +54,12 @@ const messages: Record<string, string> = {
   'keys.allStatus': 'All Status',
   'keys.columnSettings': 'Column Settings',
   'keys.createKey': 'Create API Key',
+  'keys.continueToStudio': 'Continue to Studio',
+  'keys.copied': 'Copied!',
+  'keys.copyCreatedKey': 'Copy API key',
   'keys.created': 'Created',
+  'keys.createdKeyTitle': 'Save your new API key',
+  'keys.createdKeyWarning': 'Copy and store this API key securely before continuing.',
   'keys.expiresAt': 'Expires',
   'keys.group': 'Group',
   'keys.lastUsedAt': 'Last Used',
@@ -55,7 +75,7 @@ const messages: Record<string, string> = {
 vi.mock('@/api', () => ({
   keysAPI: {
     list: listKeys,
-    create: vi.fn(),
+    create: createKey,
     update: vi.fn(),
     delete: vi.fn(),
     toggleStatus: vi.fn(),
@@ -163,7 +183,11 @@ const DataTableStub = {
 const SelectStub = {
   props: ['modelValue', 'options'],
   emits: ['update:modelValue'],
-  template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"></select>',
+  template: `
+    <select :value="modelValue" @change="$emit('update:modelValue', Number($event.target.value))">
+      <option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option>
+    </select>
+  `,
 }
 
 const SearchInputStub = {
@@ -177,6 +201,11 @@ const IconStub = {
   template: '<span data-test="icon">{{ name }}</span>',
 }
 
+const BaseDialogStub = {
+  props: ['show', 'title'],
+  template: '<div v-if="show" data-test="base-dialog"><h2>{{ title }}</h2><slot /><slot name="footer" /></div>',
+}
+
 const mountView = async () => {
   const wrapper = mount(KeysView, {
     global: {
@@ -185,7 +214,7 @@ const mountView = async () => {
         TablePageLayout: TablePageLayoutStub,
         DataTable: DataTableStub,
         Pagination: true,
-        BaseDialog: true,
+        BaseDialog: BaseDialogStub,
         ConfirmDialog: true,
         EmptyState: true,
         Select: SelectStub,
@@ -220,6 +249,7 @@ describe('user KeysView column settings', () => {
     localStorage.clear()
 
     listKeys.mockReset()
+    createKey.mockReset()
     getPublicSettings.mockReset()
     getDashboardApiKeysUsage.mockReset()
     getAvailableGroups.mockReset()
@@ -229,6 +259,8 @@ describe('user KeysView column settings', () => {
     copyToClipboard.mockReset()
     isCurrentStep.mockReset()
     nextStep.mockReset()
+    routerPush.mockReset().mockResolvedValue(undefined)
+    routeState.query = {}
 
     listKeys.mockResolvedValue({
       items: [createApiKey()],
@@ -242,6 +274,7 @@ describe('user KeysView column settings', () => {
     getAvailableGroups.mockResolvedValue([])
     getUserGroupRates.mockResolvedValue({})
     isCurrentStep.mockReturnValue(false)
+    createKey.mockResolvedValue(createApiKey())
   })
 
   it('uses the default API key columns with low-frequency columns hidden', async () => {
@@ -302,5 +335,30 @@ describe('user KeysView column settings', () => {
     expect(columnMenuText).toContain('Rate Limit')
     expect(columnMenuText).not.toContain('Name')
     expect(columnMenuText).not.toContain('Actions')
+  })
+
+  it('shows the newly created key before returning to Studio', async () => {
+    routeState.query = { create: '1', returnTo: '/studio' }
+    getAvailableGroups.mockResolvedValue([{ id: 7, name: 'Images' }])
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="base-dialog"]').exists()).toBe(true)
+    await wrapper.get('[data-tour="key-form-name"]').setValue('Studio key')
+    await wrapper.get('[data-tour="key-form-group"]').setValue('7')
+    await wrapper.get('#key-form').trigger('submit')
+    await flushPromises()
+
+    expect(createKey).toHaveBeenCalledWith('Studio key', 7, undefined, [], [], 0, undefined, {
+      rate_limit_5h: 0,
+      rate_limit_1d: 0,
+      rate_limit_7d: 0,
+    })
+    expect(routerPush).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Save your new API key')
+    expect(wrapper.text()).toContain('sk-test-key')
+
+    await wrapper.get('[data-test="finish-created-key"]').trigger('click')
+    await flushPromises()
+    expect(routerPush).toHaveBeenCalledWith('/studio')
   })
 })

@@ -91,7 +91,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.image-canvas-host { position: relative; min-height: 480px; height: 100dvh; overflow: hidden; background: rgb(248 250 252); }
+.image-canvas-host { position: relative; min-height: 480px; height: 100%; overflow: hidden; background: rgb(248 250 252); }
 .image-canvas-mount { width: 100%; height: 100%; }
 .image-canvas-loading, .image-canvas-error { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: .75rem; flex-direction: column; background: rgb(248 250 252 / .94); color: rgb(71 85 105); }
 :global(.dark) .image-canvas-host { background: rgb(15 23 42); }

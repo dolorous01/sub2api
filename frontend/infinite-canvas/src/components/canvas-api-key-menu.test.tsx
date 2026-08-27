@@ -89,7 +89,7 @@ describe("CanvasAPIKeyMenu", () => {
         const manageItem = Array.from(document.querySelectorAll<HTMLElement>("[role=menuitem]")).find((item) => item.textContent?.includes("Manage API keys"));
 
         await act(async () => manageItem?.click());
-        expect(navigate).toHaveBeenCalledWith("/keys");
+        expect(navigate).toHaveBeenCalledWith("/keys?returnTo=%2Fstudio");
 
         await act(async () => root.unmount());
     });

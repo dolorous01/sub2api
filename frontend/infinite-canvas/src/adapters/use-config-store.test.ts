@@ -46,12 +46,12 @@ describe("resolvePreferredCanvasAPIKeyID", () => {
         expect(resolvePreferredCanvasAPIKeyID(keys, 3)).toBe(3);
     });
 
-    it("falls back to the first available key", () => {
-        expect(resolvePreferredCanvasAPIKeyID(keys, 1)).toBe(2);
+    it("does not silently replace an unavailable saved selection", () => {
+        expect(resolvePreferredCanvasAPIKeyID(keys, 1)).toBeUndefined();
     });
 
-    it("supports an older server response without availability metadata", () => {
-        expect(resolvePreferredCanvasAPIKeyID([{ id: 4, name: "legacy", group_id: 1, group_name: "default" }])).toBe(4);
+    it("requires an explicit selection when no preference exists", () => {
+        expect(resolvePreferredCanvasAPIKeyID([{ id: 4, name: "legacy", group_id: 1, group_name: "default" }])).toBeUndefined();
     });
 });
 
@@ -64,6 +64,7 @@ describe("initializeCanvasConfigStore", () => {
     });
 
     it("retries after a failed initialization", async () => {
+        useCanvasSessionStore.getState().setSelection(2, "gpt-image-2");
         mocks.getConfig
             .mockRejectedValueOnce(new Error("temporary outage"))
             .mockResolvedValueOnce(summary)
@@ -80,6 +81,7 @@ describe("initializeCanvasConfigStore", () => {
     });
 
     it("keeps the active key when a switch fails", async () => {
+        useCanvasSessionStore.getState().setSelection(2, "gpt-image-2");
         mocks.getConfig
             .mockResolvedValueOnce(summary)
             .mockResolvedValueOnce({ ...summary, selected_api_key_id: 2 });
@@ -93,5 +95,17 @@ describe("initializeCanvasConfigStore", () => {
         expect(getSelectedCanvasAPIKeyID()).toBe(2);
         expect(useCanvasSessionStore.getState().apiKeyID).toBe(2);
         expect(useConfigStore.getState().canvasConfigError).toBe("key configuration failed");
+    });
+
+    it("loads the key list without selecting a key on first entry", async () => {
+        mocks.getConfig.mockResolvedValueOnce(summary);
+
+        await initializeCanvasConfigStore();
+
+        expect(mocks.getConfig).toHaveBeenCalledTimes(1);
+        expect(getSelectedCanvasAPIKeyID()).toBeUndefined();
+        expect(useCanvasSessionStore.getState().apiKeyID).toBeUndefined();
+        expect(useConfigStore.getState().canvasConfig).toEqual(summary);
+        expect(useConfigStore.getState().config.models).toEqual([]);
     });
 });

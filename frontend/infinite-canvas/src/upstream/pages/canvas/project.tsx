@@ -89,6 +89,7 @@ import {
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio } from "@/types/media";
 import { useCanvasHost } from "@sub2api/host-context";
+import { fitCanvasNodes, shouldFitRestoredViewport } from "@sub2api/lib/canvas-viewport";
 
 // Register built-in nodes in the shared registry once when the module loads.
 registerBuiltinNodes();
@@ -127,6 +128,7 @@ const NODE_STATUS_IDLE = "idle" as const;
 const NODE_STATUS_LOADING = "loading" as const;
 const NODE_STATUS_SUCCESS = "success" as const;
 const NODE_STATUS_ERROR = "error" as const;
+const DEFAULT_CANVAS_SIZE = { width: 1200, height: 720 };
 export default function CanvasPage() {
     const [mounted, setMounted] = useState(false);
 
@@ -165,7 +167,8 @@ function InfiniteCanvasPage() {
     const viewportSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const applyingHistoryRef = useRef(false);
     const historyPausedRef = useRef(false);
-    const didInitialCenterRef = useRef(false);
+    const restoreSequenceRef = useRef(0);
+    const initialViewportFitPendingRef = useRef(false);
     const rafRef = useRef<number | null>(null);
     const nodeDraggingRef = useRef(false);
     const dragRef = useRef<{
@@ -202,7 +205,7 @@ function InfiniteCanvasPage() {
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const [viewport, setViewport] = useState<ViewportTransform>({ x: 0, y: 0, k: 1 });
     const [canvasTool, setCanvasTool] = useState<"select" | "pan">("pan");
-    const [size, setSize] = useState({ width: 1200, height: 720 });
+    const [size, setSize] = useState(DEFAULT_CANVAS_SIZE);
     const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
     const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -219,7 +222,7 @@ function InfiniteCanvasPage() {
     const [showImageInfo, setShowImageInfo] = useState(false);
     const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
     const [assetPickerOpen, setAssetPickerOpen] = useState(false);
-    const [projectLoaded, setProjectLoaded] = useState(false);
+    const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
     const [toolbarNodeId, setToolbarNodeId] = useState<string | null>(null);
     const [nodeImageSettingsOpen, setNodeImageSettingsOpen] = useState(false);
     const [dialogNodeId, setDialogNodeId] = useState<string | null>(null);
@@ -240,11 +243,13 @@ function InfiniteCanvasPage() {
     const [isNodeDragging, setIsNodeDragging] = useState(false);
     const [isNodeResizing, setIsNodeResizing] = useState(false);
     const [dropTargetGroupId, setDropTargetGroupId] = useState<string | null>(null);
+    const projectLoaded = loadedProjectId === projectId;
 
     const nodesRef = useRef(nodes);
     const connectionsRef = useRef(connections);
     const selectedNodeIdsRef = useRef(selectedNodeIds);
     const viewportRef = useRef(viewport);
+    const sizeRef = useRef(size);
     const focusAnimRef = useRef<number | null>(null);
     const generateNodeRef = useRef<((nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => Promise<void>) | null>(null);
     const connectingParamsRef = useRef(connectingParams);
@@ -284,6 +289,23 @@ function InfiniteCanvasPage() {
         if (request?.controller === controller) generationRequestsRef.current.delete(targetNodeId);
     }, []);
 
+    const readViewportSize = useCallback(() => {
+        const rect = containerRef.current?.getBoundingClientRect();
+        const fallback = sizeRef.current;
+        return {
+            width: rect && rect.width > 0 ? rect.width : fallback.width > 0 ? fallback.width : DEFAULT_CANVAS_SIZE.width,
+            height: rect && rect.height > 0 ? rect.height : fallback.height > 0 ? fallback.height : DEFAULT_CANVAS_SIZE.height,
+        };
+    }, []);
+
+    const fitViewport = useCallback(
+        (targetNodes: CanvasNodeData[] = nodesRef.current) => {
+            setViewport(fitCanvasNodes(targetNodes, readViewportSize()));
+            setContextMenu(null);
+        },
+        [readViewportSize],
+    );
+
     const stopGenerationByRunningId = useCallback((runningId: string) => {
         const affectedNodeIds = new Set<string>();
         generationRequestsRef.current.forEach((request) => {
@@ -320,7 +342,10 @@ function InfiniteCanvasPage() {
 
     useEffect(() => {
         if (!hydrated) return;
-        setProjectLoaded(false);
+        const restoreSequence = ++restoreSequenceRef.current;
+        let cancelled = false;
+        initialViewportFitPendingRef.current = false;
+        setLoadedProjectId(null);
         const project = openProject(projectId);
         if (!project) {
             navigate("/canvas", { replace: true });
@@ -330,13 +355,18 @@ function InfiniteCanvasPage() {
         const restore = async () => {
             const restoredNodes = await hydrateCanvasImages(resetInterruptedGeneration(project.nodes));
             const restoredSessions = await hydrateAssistantImages(project.chatSessions || []);
+            if (cancelled || restoreSequence !== restoreSequenceRef.current) return;
+            // Newly-created projects start at the origin; center them after the real container size is known.
+            const shouldFit = shouldFitRestoredViewport(project.viewport) ||
+                (restoredNodes.length === 0 && project.viewport.x === 0 && project.viewport.y === 0 && project.viewport.k === 1);
+            initialViewportFitPendingRef.current = shouldFit;
             setNodes(restoredNodes);
             setConnections(project.connections);
             setChatSessions(restoredSessions);
             setActiveChatId(project.activeChatId || null);
             setBackgroundMode(project.backgroundMode);
             setShowImageInfo(project.showImageInfo || false);
-            setViewport(project.viewport);
+            setViewport(shouldFit ? { x: 0, y: 0, k: 1 } : project.viewport);
             historyRef.current = { past: [], future: [] };
             if (historyCommitTimerRef.current) {
                 clearTimeout(historyCommitTimerRef.current);
@@ -351,9 +381,12 @@ function InfiniteCanvasPage() {
                 showImageInfo: project.showImageInfo || false,
             };
             setHistoryState({ canUndo: false, canRedo: false });
-            setProjectLoaded(true);
+            setLoadedProjectId(projectId);
         };
         void restore();
+        return () => {
+            cancelled = true;
+        };
     }, [hydrated, navigate, openProject, projectId]);
 
     useEffect(() => {
@@ -405,7 +438,7 @@ function InfiniteCanvasPage() {
     }, [dialogNodeId]);
 
     useEffect(() => {
-        if (!projectLoaded) return;
+        if (!projectLoaded || initialViewportFitPendingRef.current) return;
         if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
         viewportSaveTimerRef.current = setTimeout(() => {
             updateProject(projectId, { viewport: viewportRef.current });
@@ -424,22 +457,30 @@ function InfiniteCanvasPage() {
         connectingParamsRef.current = connectingParams;
         connectionTargetNodeIdRef.current = connectionTargetNodeId;
         pendingConnectionCreateRef.current = pendingConnectionCreate;
-    }, [nodes, connections, selectedNodeIds, viewport, connectingParams, connectionTargetNodeId, pendingConnectionCreate]);
+        sizeRef.current = size;
+    }, [nodes, connections, selectedNodeIds, viewport, connectingParams, connectionTargetNodeId, pendingConnectionCreate, size]);
 
     useLayoutEffect(() => {
         selectionBoxRef.current = selectionBox;
     }, [selectionBox]);
 
     useEffect(() => {
+        if (!projectLoaded) return;
         const el = containerRef.current;
         if (!el) return;
 
         const updateSize = () => {
             const rect = el.getBoundingClientRect();
-            setSize({ width: rect.width, height: rect.height });
-            if (!didInitialCenterRef.current) {
-                didInitialCenterRef.current = true;
-                setViewport({ x: rect.width / 2, y: rect.height / 2, k: 1 });
+            // A hidden or not-yet-laid-out host can report zero dimensions. Keep the
+            // last usable size and wait for ResizeObserver to report a real one.
+            if (rect.width <= 0 || rect.height <= 0) return;
+            const nextSize = { width: rect.width, height: rect.height };
+            sizeRef.current = nextSize;
+            setSize(nextSize);
+            if (initialViewportFitPendingRef.current) {
+                initialViewportFitPendingRef.current = false;
+                setViewport(fitCanvasNodes(nodesRef.current, nextSize));
+                setContextMenu(null);
             }
         };
 
@@ -447,7 +488,7 @@ function InfiniteCanvasPage() {
         const resizeObserver = new ResizeObserver(updateSize);
         resizeObserver.observe(el);
         return () => resizeObserver.disconnect();
-    }, []);
+    }, [projectLoaded]);
 
     const screenToCanvas = useCallback((clientX: number, clientY: number) => {
         const rect = containerRef.current?.getBoundingClientRect();
@@ -858,9 +899,8 @@ function InfiniteCanvasPage() {
     }, [getCanvasCenter]);
 
     const resetViewport = useCallback(() => {
-        setViewport({ x: size.width / 2, y: size.height / 2, k: 1 });
-        setContextMenu(null);
-    }, [size.height, size.width]);
+        fitViewport();
+    }, [fitViewport]);
 
     const focusNode = useCallback(
         (nodeId: string) => {

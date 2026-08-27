@@ -277,7 +277,7 @@ export function selectCanvasAPIKey(apiKeyID: number): Promise<void> {
 
 export function resolvePreferredCanvasAPIKeyID(apiKeys: CanvasAPIKey[], preferred?: number): number | undefined {
     const availableKeys = apiKeys.filter((item) => item.available !== false);
-    return availableKeys.some((item) => item.id === preferred) ? preferred : availableKeys[0]?.id;
+    return availableKeys.some((item) => item.id === preferred) ? preferred : undefined;
 }
 
 export function useEffectiveConfig() {

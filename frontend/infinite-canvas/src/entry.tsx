@@ -18,9 +18,11 @@ import {
 import { clearCanvasRuntimeHost, setCanvasRuntimeHost } from '@sub2api/runtime/host-runtime'
 import { initializeCanvasProjectStore, resetCanvasProjectStore } from '@sub2api/adapters/use-canvas-store'
 import { resetCanvasAssetRuntime } from '@sub2api/adapters/asset-runtime'
-import { initializeCanvasConfigStore, resetCanvasConfigStore } from '@sub2api/adapters/use-config-store'
+import { initializeCanvasConfigStore, resetCanvasConfigStore, useConfigStore } from '@sub2api/adapters/use-config-store'
 import CanvasProjectRuntime from '@sub2api/components/canvas-project-runtime'
+import { CanvasAPIKeyEmptyState, CanvasConfigErrorState } from '@sub2api/components/canvas-api-key-empty-state'
 import CanvasProjectsPage from '@/pages/canvas'
+import { CanvasRefreshShell } from '@/components/canvas/canvas-refresh-shell'
 import upstreamI18n from '@/i18n'
 import { getAntThemeConfig } from '@/lib/app-theme'
 import { useThemeStore } from '@/stores/use-theme-store'
@@ -89,10 +91,22 @@ function CanvasRuntime({ mountElement }: { mountElement: HTMLElement }) {
   return (
     <StyleProvider container={styleContainer}>
       <CanvasProviders mountElement={mountElement}>
-        <RouterProvider router={router} />
+        <CanvasConfiguredRouter router={router} />
       </CanvasProviders>
     </StyleProvider>
   )
+}
+
+function CanvasConfiguredRouter({ router }: { router: ReturnType<typeof createMemoryRouter> }) {
+  const config = useConfigStore((state) => state.canvasConfig)
+  const loading = useConfigStore((state) => state.canvasConfigLoading)
+  const error = useConfigStore((state) => state.canvasConfigError)
+
+  if (!config && loading) return <CanvasRefreshShell />
+  if (!config && error) return <CanvasConfigErrorState message={error} onRetry={() => void initializeCanvasConfigStore()} />
+  if (config?.api_keys.length === 0) return <CanvasAPIKeyEmptyState />
+  if (config && !config.api_keys.some((key) => key.available !== false)) return <CanvasAPIKeyEmptyState unavailable />
+  return <RouterProvider router={router} />
 }
 
 export function mountCanvas(element: HTMLElement, context: CanvasHostContext): CanvasHandle {

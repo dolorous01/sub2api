@@ -4,13 +4,20 @@ import { describe, expect, it } from 'vitest'
 import ImageCanvasView from '../ImageCanvasView.vue'
 
 describe('ImageCanvasView', () => {
-  it('uses a dedicated full-viewport Studio layout', () => {
+  it('fills the area below the global navigation without a card container', () => {
     const wrapper = mount(ImageCanvasView, {
-      global: { stubs: { ImageCanvasHost: { template: '<div data-testid="canvas-host" />' } } }
+      global: {
+        stubs: {
+          AppLayout: { template: '<div data-testid="app-layout"><slot /></div>' },
+          ImageCanvasHost: { template: '<div data-testid="canvas-host" />' }
+        }
+      }
     })
 
-    expect(wrapper.find('main').classes()).toContain('h-dvh')
+    const canvasArea = wrapper.find('[data-testid="app-layout"] > div')
+    expect(canvasArea.classes()).toContain('h-[calc(100dvh-4rem)]')
+    expect(canvasArea.classes()).toContain('-m-4')
     expect(wrapper.find('[data-testid="canvas-host"]').exists()).toBe(true)
-    expect(wrapper.findComponent({ name: 'AppLayout' }).exists()).toBe(false)
+    expect(wrapper.find('[data-testid="app-layout"]').exists()).toBe(true)
   })
 })

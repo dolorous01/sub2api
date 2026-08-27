@@ -1,9 +1,12 @@
 <template>
-  <main class="h-dvh min-h-[480px] w-full overflow-hidden bg-gray-50 dark:bg-dark-950">
-    <ImageCanvasHost route-mode="user" />
-  </main>
+  <AppLayout>
+    <div class="-m-4 h-[calc(100dvh-4rem)] min-h-[480px] overflow-hidden md:-m-6 lg:-m-8">
+      <ImageCanvasHost route-mode="user" />
+    </div>
+  </AppLayout>
 </template>
 
 <script setup lang="ts">
+import AppLayout from '@/components/layout/AppLayout.vue'
 import ImageCanvasHost from '@/components/image-canvas/ImageCanvasHost.vue'
 </script>
