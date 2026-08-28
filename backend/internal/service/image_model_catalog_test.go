@@ -174,14 +174,14 @@ func TestImageModelCatalogAdminCoverageHonorsGroupAndKeyState(t *testing.T) {
 	}
 	disabledKey := APIKey{ID: 43, UserID: 9, GroupID: &groupID, Status: StatusAPIKeyDisabled}
 	activeKey := APIKey{ID: 42, UserID: 9, GroupID: &groupID, Status: StatusAPIKeyActive}
-	catalog := NewImageModelCatalog(
+	catalog := newImageModelCatalog(
 		imageModelCatalogAPIKeyRepo{keys: []APIKey{activeKey, disabledKey}},
 		imageModelCatalogGroupRepo{groups: map[int64]*Group{groupID: group}},
 		imageModelCatalogAccountRepo{byGroup: map[int64][]Account{groupID: {account}}},
 		nil,
 	)
 
-	entries, err := catalog.(ImageModelCatalogAdmin).ListAdmin(context.Background())
+	entries, err := catalog.ListAdmin(context.Background())
 	require.NoError(t, err)
 	require.Len(t, entries, 2)
 	byModel := make(map[string]ImageModelCatalogEntry, len(entries))
@@ -199,14 +199,14 @@ func TestImageModelCatalogAdminRejectsUngroupedAccounts(t *testing.T) {
 		ID: 7, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
 		Status: StatusActive, Schedulable: true,
 	}
-	catalog := NewImageModelCatalog(
+	catalog := newImageModelCatalog(
 		imageModelCatalogAPIKeyRepo{},
 		imageModelCatalogGroupRepo{},
 		imageModelCatalogAccountRepo{byGroup: map[int64][]Account{0: {account}}},
 		nil,
 	)
 
-	entries, err := catalog.(ImageModelCatalogAdmin).ListAdmin(context.Background())
+	entries, err := catalog.ListAdmin(context.Background())
 	require.NoError(t, err)
 	require.NotEmpty(t, entries)
 	for _, entry := range entries {
@@ -216,12 +216,12 @@ func TestImageModelCatalogAdminRejectsUngroupedAccounts(t *testing.T) {
 }
 
 func TestImageModelCatalogAdminCheckDistinguishesKnownAndUnknownModels(t *testing.T) {
-	catalog := NewImageModelCatalog(
+	catalog := newImageModelCatalog(
 		imageModelCatalogAPIKeyRepo{},
 		imageModelCatalogGroupRepo{},
 		imageModelCatalogAccountRepo{},
 		nil,
-	).(ImageModelCatalogAdmin)
+	)
 
 	known, err := catalog.CheckSchedulability(context.Background(), "gpt-image-2")
 	require.NoError(t, err)
