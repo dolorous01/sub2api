@@ -40,6 +40,8 @@ type imageModelCatalog struct {
 	runtime        *ImageJobRuntimeSettingsService
 }
 
+var _ ImageModelCatalogAdmin = (*imageModelCatalog)(nil)
+
 func NewImageModelCatalog(
 	apiKeys APIKeyRepository,
 	groups GroupRepository,
@@ -180,6 +182,235 @@ func (c *imageModelCatalog) ListSchedulable(ctx context.Context) (map[string]Ima
 		return nil, fmt.Errorf("list schedulable image accounts: %w", err)
 	}
 	return c.capabilitiesForAccounts(accounts), nil
+}
+
+// ListAdmin builds the inventory used by the administrator console. It uses
+// the same schedulable-account source as request routing, then adds coverage
+// counts without ever returning credentials or prompts.
+func (c *imageModelCatalog) ListAdmin(ctx context.Context) ([]ImageModelCatalogEntry, error) {
+	if c == nil || c.accounts == nil {
+		return nil, fmt.Errorf("image model catalog account source is required")
+	}
+	accounts, err := c.accounts.ListSchedulable(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list schedulable image accounts for admin catalog: %w", err)
+	}
+
+	maxInputImages, maxOutputs := c.maxInputImages, c.maxOutputs
+	if c.runtime != nil {
+		settings := c.runtime.Current()
+		if settings.MaxInputImages > 0 {
+			maxInputImages = settings.MaxInputImages
+		}
+		if settings.MaxOutputsPerJob > 0 {
+			maxOutputs = settings.MaxOutputsPerJob
+		}
+	}
+
+	type aggregate struct {
+		capability ImageModelCapability
+		accounts   map[int64]struct{}
+		groups     map[int64]struct{}
+		filtered   bool
+		noGroup    bool
+	}
+	aggregates := make(map[string]*aggregate)
+	groupCache := make(map[int64]*Group)
+	for index := range accounts {
+		for _, group := range accounts[index].Groups {
+			if group != nil && group.ID > 0 {
+				groupCache[group.ID] = group
+			}
+		}
+	}
+
+	groupForAccount := func(groupID int64) *Group {
+		if groupID <= 0 || c.groups == nil {
+			return nil
+		}
+		if group, ok := groupCache[groupID]; ok {
+			return group
+		}
+		group, getErr := c.groups.GetByID(ctx, groupID)
+		if getErr != nil || group == nil {
+			// User admission requires a valid group, so a missing group must stay
+			// fail-closed in the administrator coverage view too.
+			groupCache[groupID] = nil
+			return nil
+		}
+		groupCache[groupID] = group
+		return group
+	}
+
+	for index := range accounts {
+		account := &accounts[index]
+		if !account.IsSchedulable() {
+			continue
+		}
+		accountModels := account.ImageCanvasModelCatalog(maxInputImages, maxOutputs)
+		if len(accountModels) == 0 {
+			continue
+		}
+		groupIDs := append([]int64(nil), account.GroupIDs...)
+		if len(groupIDs) == 0 && len(account.Groups) > 0 {
+			for _, group := range account.Groups {
+				if group != nil {
+					groupIDs = append(groupIDs, group.ID)
+				}
+			}
+		}
+		for model, capability := range accountModels {
+			item := aggregates[model]
+			if item == nil {
+				item = &aggregate{
+					capability: capability,
+					accounts:   make(map[int64]struct{}),
+					groups:     make(map[int64]struct{}),
+				}
+				aggregates[model] = item
+			} else {
+				item.capability = mergeImageModelCapability(item.capability, capability)
+			}
+
+			if len(groupIDs) == 0 {
+				item.noGroup = true
+			}
+			for _, groupID := range groupIDs {
+				group := groupForAccount(groupID)
+				if group == nil || !imageCanvasGroupAvailable(group) {
+					item.noGroup = true
+					continue
+				}
+				filtered := filterImageCanvasModelsForGroup(
+					map[string]ImageModelCapability{model: capability}, group,
+				)
+				if _, ok := filtered[model]; !ok {
+					item.filtered = true
+					continue
+				}
+				accountID := account.ID
+				if accountID <= 0 {
+					// Test/dry-run repositories may omit IDs. Use a stable
+					// per-slice sentinel so those rows still count once.
+					accountID = int64(index + 1)
+				}
+				item.accounts[accountID] = struct{}{}
+				if groupID > 0 {
+					item.groups[groupID] = struct{}{}
+				}
+			}
+		}
+	}
+
+	// Runtime overrides affect the capability contract shown to operators too.
+	capabilities := make(map[string]ImageModelCapability, len(aggregates))
+	for model, item := range aggregates {
+		capabilities[model] = item.capability
+	}
+	if c.runtime != nil {
+		applyImageModelRuntimeOverrides(capabilities, c.runtime.Current())
+	}
+
+	keyCountCache := make(map[int64]int)
+	countKeys := func(groupID int64) (int, error) {
+		if groupID <= 0 || c.apiKeys == nil {
+			return 0, nil
+		}
+		if count, ok := keyCountCache[groupID]; ok {
+			return count, nil
+		}
+		count := 0
+		page := 1
+		for {
+			keys, pages, listErr := c.apiKeys.ListByGroupID(ctx, groupID, pagination.PaginationParams{
+				Page: page, PageSize: imageCanvasCatalogPageSize, SortOrder: pagination.SortOrderAsc,
+			})
+			if listErr != nil {
+				return 0, fmt.Errorf("list image canvas keys for group %d: %w", groupID, listErr)
+			}
+			for index := range keys {
+				key := &keys[index]
+				if imageCanvasAPIKeyUnavailableReason(key, key.UserID) == "" {
+					count++
+				}
+			}
+			if pages == nil || page >= pages.Pages || len(keys) == 0 {
+				break
+			}
+			page++
+		}
+		keyCountCache[groupID] = count
+		return count, nil
+	}
+
+	models := make([]string, 0, len(aggregates))
+	for model := range aggregates {
+		models = append(models, model)
+	}
+	sort.Strings(models)
+	result := make([]ImageModelCatalogEntry, 0, len(models))
+	for _, model := range models {
+		item := aggregates[model]
+		coverage := ImageModelCoverage{AccountCount: len(item.accounts), GroupCount: len(item.groups)}
+		for groupID := range item.groups {
+			keys, countErr := countKeys(groupID)
+			if countErr != nil {
+				return nil, countErr
+			}
+			coverage.APIKeyCount += keys
+		}
+		capability := capabilities[model]
+		schedulable := coverage.AccountCount > 0 && coverage.GroupCount > 0
+		reason := ""
+		if !schedulable {
+			switch {
+			case item.filtered:
+				reason = ImageModelSchedulabilityReasonGroupFiltered
+			case item.noGroup:
+				reason = ImageModelSchedulabilityReasonNoGroup
+			default:
+				reason = ImageModelSchedulabilityReasonNoAccount
+			}
+		}
+		result = append(result, ImageModelCatalogEntry{
+			Model: model, Provider: capability.Provider, MediaKind: capability.MediaKind,
+			Capability: capability, Coverage: coverage, Schedulable: schedulable,
+			SchedulabilityReason: reason,
+		})
+	}
+	return result, nil
+}
+
+func (c *imageModelCatalog) CheckSchedulability(ctx context.Context, model string) (ImageModelCatalogEntry, error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return ImageModelCatalogEntry{SchedulabilityReason: ImageModelSchedulabilityReasonUnknownModel}, nil
+	}
+	entries, err := c.ListAdmin(ctx)
+	if err != nil {
+		return ImageModelCatalogEntry{}, err
+	}
+	for _, entry := range entries {
+		if entry.Model == model {
+			return entry, nil
+		}
+	}
+	for _, entry := range entries {
+		if strings.EqualFold(entry.Model, model) {
+			return entry, nil
+		}
+	}
+	if capability, known := inferredImageCanvasCapability(model, c.maxInputImages, c.maxOutputs); known {
+		return ImageModelCatalogEntry{
+			Model: model, Provider: capability.Provider, MediaKind: capability.MediaKind,
+			Capability: capability, Schedulable: false,
+			SchedulabilityReason: ImageModelSchedulabilityReasonNoAccount,
+		}, nil
+	}
+	return ImageModelCatalogEntry{
+		Model: model, Schedulable: false,
+		SchedulabilityReason: ImageModelSchedulabilityReasonUnknownModel,
+	}, nil
 }
 
 func (c *imageModelCatalog) groupForAPIKey(ctx context.Context, key *APIKey) (*Group, error) {

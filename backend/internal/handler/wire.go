@@ -105,6 +105,16 @@ func ProvideImageCanvasHandler(
 	return NewImageCanvasHandler(projects, jobs, policies, catalog).SetMediaService(media).SetEditorService(editor)
 }
 
+func ProvideAdminImageCanvasHandler(
+	policies *service.ImageModelPolicyService,
+	catalog service.ImageModelCatalog,
+	runtime *service.ImageJobRuntimeSettingsService,
+	jobs *service.ImageJobService,
+	settings *service.SettingService,
+) *admin.ImageCanvasHandler {
+	return admin.NewImageCanvasHandler(policies, catalog, runtime, jobs, settings)
+}
+
 // ProvideAdminSettingHandler creates admin.SettingHandler with notification template APIs.
 func ProvideAdminSettingHandler(settingService *service.SettingService, emailService *service.EmailService, turnstileService *service.TurnstileService, opsService *service.OpsService, paymentConfigService *service.PaymentConfigService, paymentService *service.PaymentService, userAttributeService *service.UserAttributeService, notificationEmailService *service.NotificationEmailService) *admin.SettingHandler {
 	h := admin.NewSettingHandler(settingService, emailService, turnstileService, opsService, paymentConfigService, paymentService, userAttributeService)
@@ -209,7 +219,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewAffiliateHandler,
 	admin.NewComplianceHandler,
 	admin.NewImageJobHandler,
-	admin.NewImageCanvasHandler,
+	ProvideAdminImageCanvasHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,

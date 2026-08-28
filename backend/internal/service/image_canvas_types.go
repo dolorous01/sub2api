@@ -126,6 +126,42 @@ type ImageModelPolicyItem struct {
 	Capability ImageModelCapability `json:"capability,omitempty"`
 }
 
+// ImageModelCoverage is the currently schedulable footprint of a model. The
+// counts intentionally describe references (an account can belong to more
+// than one group) rather than exposing any credential material.
+type ImageModelCoverage struct {
+	AccountCount int `json:"account_count"`
+	GroupCount   int `json:"group_count"`
+	APIKeyCount  int `json:"api_key_count"`
+}
+
+// ImageModelCatalogEntry is the administrator-facing model inventory row.
+// Capability remains the server-authoritative parameter contract used by the
+// user canvas; the other fields explain why a model can (or cannot) be used.
+type ImageModelCatalogEntry struct {
+	Model                string               `json:"model"`
+	Provider             string               `json:"provider,omitempty"`
+	MediaKind            string               `json:"media_kind,omitempty"`
+	Capability           ImageModelCapability `json:"capability,omitempty"`
+	Coverage             ImageModelCoverage   `json:"coverage"`
+	Schedulable          bool                 `json:"schedulable"`
+	SchedulabilityReason string               `json:"schedulability_reason,omitempty"`
+}
+
+const (
+	ImageModelSchedulabilityReasonNoAccount     = "no_schedulable_account"
+	ImageModelSchedulabilityReasonNoGroup       = "no_eligible_group"
+	ImageModelSchedulabilityReasonGroupFiltered = "group_model_filter"
+	ImageModelSchedulabilityReasonUnknownModel  = "unknown_model"
+)
+
+// ImageModelCatalogAdmin is optional so user-facing catalog implementations
+// and test doubles do not need to expose administrator-only coverage data.
+type ImageModelCatalogAdmin interface {
+	ListAdmin(ctx context.Context) ([]ImageModelCatalogEntry, error)
+	CheckSchedulability(ctx context.Context, model string) (ImageModelCatalogEntry, error)
+}
+
 type ImageModelPolicy struct {
 	Version int64                  `json:"version"`
 	Enabled bool                   `json:"enabled"`

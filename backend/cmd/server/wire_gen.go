@@ -262,7 +262,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	imageModelPolicyRepository := repository.NewImageModelPolicyRepository(db)
 	imageModelPolicyService := service.NewImageModelPolicyService(imageModelPolicyRepository)
 	imageModelCatalog := service.ProvideImageModelCatalog(apiKeyRepository, groupRepository, accountRepository, configConfig, imageJobRuntimeSettingsService)
-	adminImageCanvasHandler := admin.NewImageCanvasHandler(imageModelPolicyService, imageModelCatalog, imageJobRuntimeSettingsService, imageJobService)
+	adminImageCanvasHandler := handler.ProvideAdminImageCanvasHandler(imageModelPolicyService, imageModelCatalog, imageJobRuntimeSettingsService, imageJobService, settingService)
 	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, dataManagementHandler, backupHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, grokOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, tlsFingerprintProfileHandler, adminAPIKeyHandler, scheduledTestHandler, channelHandler, channelMonitorHandler, channelMonitorRequestTemplateHandler, contentModerationHandler, paymentHandler, affiliateHandler, complianceHandler, imageJobHandler, adminImageCanvasHandler)
 	usageRecordWorkerPool := service.NewUsageRecordWorkerPool(configConfig)
 	userMsgQueueCache := repository.NewUserMsgQueueCache(redisClient)

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -26,6 +27,7 @@ type ImageCanvasHandler struct {
 	catalog  service.ImageModelCatalog
 	runtime  *service.ImageJobRuntimeSettingsService
 	jobs     *service.ImageJobService
+	settings *service.SettingService
 }
 
 func NewImageCanvasHandler(
@@ -33,8 +35,25 @@ func NewImageCanvasHandler(
 	catalog service.ImageModelCatalog,
 	runtime *service.ImageJobRuntimeSettingsService,
 	jobs *service.ImageJobService,
+	dependencies ...any,
 ) *ImageCanvasHandler {
-	return &ImageCanvasHandler{policies: policies, catalog: catalog, runtime: runtime, jobs: jobs}
+	h := &ImageCanvasHandler{policies: policies, catalog: catalog, runtime: runtime, jobs: jobs}
+	for _, dependency := range dependencies {
+		if settings, ok := dependency.(*service.SettingService); ok {
+			h.settings = settings
+		}
+	}
+	return h
+}
+
+// SetSettingService wires the route-level feature flag into the admin status
+// view without changing the constructor shape used by older generated Wire
+// files.
+func (h *ImageCanvasHandler) SetSettingService(settings *service.SettingService) *ImageCanvasHandler {
+	if h != nil {
+		h.settings = settings
+	}
+	return h
 }
 
 type UpdateImageModelPolicyRequest struct {
@@ -44,10 +63,11 @@ type UpdateImageModelPolicyRequest struct {
 }
 
 type ImageModelPolicyResponse struct {
-	Version         int64                          `json:"version"`
-	Enabled         bool                           `json:"enabled"`
-	Models          []service.ImageModelPolicyItem `json:"models"`
-	AvailableModels []service.ImageModelPolicyItem `json:"available_models"`
+	Version         int64                            `json:"version"`
+	Enabled         bool                             `json:"enabled"`
+	Models          []service.ImageModelPolicyItem   `json:"models"`
+	AvailableModels []service.ImageModelPolicyItem   `json:"available_models"`
+	Catalog         []service.ImageModelCatalogEntry `json:"catalog,omitempty"`
 }
 
 type ImageJobRuntimeSettingsResponse struct {
@@ -56,6 +76,67 @@ type ImageJobRuntimeSettingsResponse struct {
 	Storage         service.ImageJobStorageInfo     `json:"storage"`
 	Worker          service.ImageJobWorkerSnapshot  `json:"worker"`
 	AvailableModels []service.ImageModelPolicyItem  `json:"available_models"`
+}
+
+type ImageCanvasFallbackRules struct {
+	SelectedModelFirst      bool     `json:"selected_model_first"`
+	SameProviderOnly        bool     `json:"same_provider_only"`
+	RetryableStatusCodes    []string `json:"retryable_status_codes"`
+	RequiresZeroFinalOutput bool     `json:"requires_zero_final_output"`
+	ContentPolicyFallsBack  bool     `json:"content_policy_falls_back"`
+	AccountFailoverFirst    bool     `json:"account_failover_first"`
+}
+
+type ImageCanvasOverviewResponse struct {
+	EntryEnabled     bool                             `json:"entry_enabled"`
+	PolicyEnabled    bool                             `json:"policy_enabled"`
+	PolicyVersion    int64                            `json:"policy_version"`
+	ActiveModelCount int                              `json:"active_model_count"`
+	Catalog          []service.ImageModelCatalogEntry `json:"catalog"`
+	Worker           service.ImageJobWorkerSnapshot   `json:"worker"`
+	Storage          service.ImageJobStorageInfo      `json:"storage"`
+	FallbackRules    ImageCanvasFallbackRules         `json:"fallback_rules"`
+}
+
+type ImageModelCheckResponse struct {
+	Model                string                       `json:"model"`
+	Schedulable          bool                         `json:"schedulable"`
+	SchedulabilityReason string                       `json:"schedulability_reason,omitempty"`
+	PolicyEnabled        bool                         `json:"policy_enabled"`
+	PolicyListed         bool                         `json:"policy_listed"`
+	PolicyItemEnabled    bool                         `json:"policy_item_enabled"`
+	Eligible             bool                         `json:"eligible"`
+	Provider             string                       `json:"provider,omitempty"`
+	MediaKind            string                       `json:"media_kind,omitempty"`
+	Capability           service.ImageModelCapability `json:"capability,omitempty"`
+	Coverage             service.ImageModelCoverage   `json:"coverage"`
+}
+
+type ImageJobAdminView struct {
+	ID              string                    `json:"id"`
+	UserID          int64                     `json:"user_id"`
+	Status          service.ImageJobStatus    `json:"status"`
+	Operation       string                    `json:"operation"`
+	Mode            string                    `json:"mode,omitempty"`
+	RequestedModel  string                    `json:"requested_model"`
+	MappedModel     string                    `json:"mapped_model,omitempty"`
+	SelectedModel   string                    `json:"selected_model,omitempty"`
+	SuccessfulModel string                    `json:"successful_model,omitempty"`
+	APIKeyID        int64                     `json:"api_key_id"`
+	GroupID         int64                     `json:"group_id"`
+	ProjectID       *int64                    `json:"project_id,omitempty"`
+	PolicyVersion   int64                     `json:"policy_version,omitempty"`
+	ExecutionPhase  string                    `json:"execution_phase,omitempty"`
+	RequestedCount  int                       `json:"requested_count"`
+	CompletedCount  int                       `json:"completed_count"`
+	AttemptPlan     []string                  `json:"attempt_plan"`
+	AttemptLog      []service.ImageJobAttempt `json:"attempt_log"`
+	Error           *service.ImageJobError    `json:"error,omitempty"`
+	CreatedAt       time.Time                 `json:"created_at"`
+	StartedAt       *time.Time                `json:"started_at,omitempty"`
+	FinishedAt      *time.Time                `json:"finished_at,omitempty"`
+	UpdatedAt       time.Time                 `json:"updated_at"`
+	DurationMS      int64                     `json:"duration_ms,omitempty"`
 }
 
 func (h *ImageCanvasHandler) GetRuntimeSettings(c *gin.Context) {
@@ -115,6 +196,235 @@ func (h *ImageCanvasHandler) UpdateRuntimeSettings(c *gin.Context) {
 	response.Success(c, h.runtimeSettingsResponse(updated, capabilities))
 }
 
+// GetOverview returns the compact operational snapshot used by the redesigned
+// admin console. It deliberately keeps policy state separate from the route
+// feature flag so an operator can see which gate is stopping requests.
+func (h *ImageCanvasHandler) GetOverview(c *gin.Context) {
+	if !requireImageCanvasAdmin(c) {
+		return
+	}
+	if h == nil || h.catalog == nil {
+		writeAdminImageCanvasError(c, fmt.Errorf("image canvas overview dependencies are unavailable"))
+		return
+	}
+	catalog, err := h.listAdminCatalog(c.Request.Context())
+	if err != nil {
+		writeAdminImageCanvasError(c, err)
+		return
+	}
+	policyEnabled := false
+	var policyVersion int64
+	if h.policies != nil {
+		policy, policyErr := h.policies.Get(c.Request.Context())
+		if policyErr != nil {
+			writeAdminImageCanvasError(c, policyErr)
+			return
+		}
+		if policy != nil {
+			policyEnabled = policy.Enabled
+			policyVersion = policy.Version
+		}
+	}
+	worker := service.ImageJobWorkerSnapshot{}
+	storage := service.ImageJobStorageInfo{}
+	if h.runtime != nil {
+		worker = h.runtimeWorkerSnapshot()
+		storage = h.runtime.StorageInfo()
+	}
+	entryEnabled := false
+	if h.settings != nil {
+		entryEnabled = h.settings.IsImageCanvasEnabled(c.Request.Context())
+	}
+	activeModels := 0
+	for _, item := range catalog {
+		if item.Schedulable {
+			activeModels++
+		}
+	}
+	response.Success(c, ImageCanvasOverviewResponse{
+		EntryEnabled: entryEnabled, PolicyEnabled: policyEnabled, PolicyVersion: policyVersion,
+		ActiveModelCount: activeModels, Catalog: catalog, Worker: worker, Storage: storage,
+		FallbackRules: ImageCanvasFallbackRules{
+			SelectedModelFirst:      true,
+			SameProviderOnly:        true,
+			RetryableStatusCodes:    []string{"0", "429", "5xx"},
+			RequiresZeroFinalOutput: true,
+			ContentPolicyFallsBack:  false,
+			AccountFailoverFirst:    true,
+		},
+	})
+}
+
+// CheckModel is a non-billable preflight check. It only inspects the local
+// account/catalog and policy state; no provider request is sent.
+func (h *ImageCanvasHandler) CheckModel(c *gin.Context) {
+	if !requireImageCanvasAdmin(c) {
+		return
+	}
+	if h == nil || h.catalog == nil {
+		writeAdminImageCanvasError(c, fmt.Errorf("image canvas catalog dependencies are unavailable"))
+		return
+	}
+	model := strings.TrimSpace(c.Param("model"))
+	entry, err := h.checkAdminModel(c.Request.Context(), model)
+	if err != nil {
+		writeAdminImageCanvasError(c, err)
+		return
+	}
+	result := ImageModelCheckResponse{
+		Model: entry.Model, Schedulable: entry.Schedulable,
+		SchedulabilityReason: entry.SchedulabilityReason,
+		Provider:             entry.Provider, MediaKind: entry.MediaKind,
+		Capability: entry.Capability, Coverage: entry.Coverage,
+	}
+	if h.policies != nil {
+		policy, policyErr := h.policies.Get(c.Request.Context())
+		if policyErr != nil {
+			writeAdminImageCanvasError(c, policyErr)
+			return
+		}
+		if policy != nil {
+			result.PolicyEnabled = policy.Enabled
+			for _, item := range policy.Items {
+				if item.Model == entry.Model || strings.EqualFold(item.Model, entry.Model) {
+					result.PolicyListed = true
+					result.PolicyItemEnabled = item.Enabled
+					break
+				}
+			}
+		}
+	} else {
+		result.PolicyEnabled = true
+		result.PolicyListed = true
+		result.PolicyItemEnabled = true
+	}
+	result.Eligible = result.Schedulable && result.PolicyEnabled && result.PolicyListed && result.PolicyItemEnabled
+	response.Success(c, result)
+}
+
+func (h *ImageCanvasHandler) ListRecentJobs(c *gin.Context) {
+	if !requireImageCanvasAdmin(c) {
+		return
+	}
+	if h == nil || h.jobs == nil {
+		writeAdminImageCanvasError(c, service.ErrImageJobUnavailable)
+		return
+	}
+	limit := 30
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		if parsed, parseErr := strconv.Atoi(raw); parseErr == nil {
+			limit = parsed
+		}
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	jobs, err := h.jobs.ListRecentAdmin(c.Request.Context(), limit)
+	if err != nil {
+		writeAdminImageCanvasError(c, err)
+		return
+	}
+	items := make([]ImageJobAdminView, 0, len(jobs))
+	for _, job := range jobs {
+		if job != nil {
+			items = append(items, imageJobAdminView(job))
+		}
+	}
+	response.Success(c, gin.H{"items": items})
+}
+
+func (h *ImageCanvasHandler) listAdminCatalog(ctx context.Context) ([]service.ImageModelCatalogEntry, error) {
+	if adminCatalog, ok := h.catalog.(service.ImageModelCatalogAdmin); ok {
+		return adminCatalog.ListAdmin(ctx)
+	}
+	capabilities, err := h.catalog.ListSchedulable(ctx)
+	if err != nil {
+		return nil, err
+	}
+	models := make([]string, 0, len(capabilities))
+	for model := range capabilities {
+		models = append(models, model)
+	}
+	sort.Strings(models)
+	result := make([]service.ImageModelCatalogEntry, 0, len(models))
+	for _, model := range models {
+		capability := capabilities[model]
+		result = append(result, service.ImageModelCatalogEntry{
+			Model: model, Provider: capability.Provider, MediaKind: capability.MediaKind,
+			Capability: capability, Schedulable: true,
+		})
+	}
+	return result, nil
+}
+
+func (h *ImageCanvasHandler) listSchedulableAdminCatalog(
+	ctx context.Context,
+) ([]service.ImageModelCatalogEntry, map[string]service.ImageModelCapability, error) {
+	catalog, err := h.listAdminCatalog(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	capabilities := make(map[string]service.ImageModelCapability, len(catalog))
+	for _, entry := range catalog {
+		if entry.Schedulable {
+			capabilities[entry.Model] = entry.Capability
+		}
+	}
+	return catalog, capabilities, nil
+}
+
+func (h *ImageCanvasHandler) checkAdminModel(ctx context.Context, model string) (service.ImageModelCatalogEntry, error) {
+	if adminCatalog, ok := h.catalog.(service.ImageModelCatalogAdmin); ok {
+		return adminCatalog.CheckSchedulability(ctx, model)
+	}
+	model = strings.TrimSpace(model)
+	capabilities, err := h.catalog.ListSchedulable(ctx)
+	if err != nil {
+		return service.ImageModelCatalogEntry{}, err
+	}
+	capability, ok := capabilities[model]
+	if !ok {
+		return service.ImageModelCatalogEntry{Model: model, SchedulabilityReason: service.ImageModelSchedulabilityReasonNoAccount}, nil
+	}
+	return service.ImageModelCatalogEntry{Model: model, Provider: capability.Provider, MediaKind: capability.MediaKind, Capability: capability, Schedulable: true}, nil
+}
+
+func (h *ImageCanvasHandler) runtimeWorkerSnapshot() service.ImageJobWorkerSnapshot {
+	if h != nil && h.jobs != nil {
+		return h.jobs.WorkerSnapshot()
+	}
+	return service.ImageJobWorkerSnapshot{}
+}
+
+func imageJobAdminView(job *service.ImageJob) ImageJobAdminView {
+	view := ImageJobAdminView{
+		ID: job.PublicID, UserID: job.UserID, Status: job.Status, Operation: job.Operation, Mode: job.Mode,
+		RequestedModel: job.RequestedModel, MappedModel: job.MappedModel,
+		SelectedModel: job.SelectedModel, SuccessfulModel: job.SuccessfulModel,
+		APIKeyID: job.APIKeyID, GroupID: job.GroupID, ProjectID: job.ProjectID,
+		PolicyVersion: job.PolicyVersion, ExecutionPhase: job.ExecutionPhase,
+		RequestedCount: job.RequestedCount, CompletedCount: job.CompletedCount,
+		AttemptPlan: append([]string{}, job.AttemptPlan...),
+		AttemptLog:  append([]service.ImageJobAttempt{}, job.AttemptLog...),
+		Error:       job.Error, CreatedAt: job.CreatedAt, StartedAt: job.StartedAt,
+		FinishedAt: job.FinishedAt, UpdatedAt: job.UpdatedAt,
+	}
+	if job.StartedAt != nil {
+		end := job.FinishedAt
+		if end == nil {
+			now := time.Now()
+			end = &now
+		}
+		if end.After(*job.StartedAt) {
+			view.DurationMS = end.Sub(*job.StartedAt).Milliseconds()
+		}
+	}
+	return view
+}
+
 func (h *ImageCanvasHandler) runtimeSettingsResponse(
 	settings service.ImageJobRuntimeSettings,
 	capabilities map[string]service.ImageModelCapability,
@@ -169,12 +479,14 @@ func (h *ImageCanvasHandler) GetPolicy(c *gin.Context) {
 		writeAdminImageCanvasError(c, err)
 		return
 	}
-	capabilities, err := h.catalog.ListSchedulable(c.Request.Context())
+	catalog, capabilities, err := h.listSchedulableAdminCatalog(c.Request.Context())
 	if err != nil {
 		writeAdminImageCanvasError(c, err)
 		return
 	}
-	response.Success(c, buildImageModelPolicyResponse(policy, capabilities))
+	result := buildImageModelPolicyResponse(policy, capabilities)
+	result.Catalog = catalog
+	response.Success(c, result)
 }
 
 func (h *ImageCanvasHandler) UpdatePolicy(c *gin.Context) {
@@ -200,7 +512,7 @@ func (h *ImageCanvasHandler) UpdatePolicy(c *gin.Context) {
 		writeAdminImageCanvasError(c, err)
 		return
 	}
-	capabilities, err := h.catalog.ListSchedulable(c.Request.Context())
+	catalog, capabilities, err := h.listSchedulableAdminCatalog(c.Request.Context())
 	if err != nil {
 		writeAdminImageCanvasError(c, err)
 		return
@@ -220,7 +532,9 @@ func (h *ImageCanvasHandler) UpdatePolicy(c *gin.Context) {
 		writeAdminImageCanvasError(c, err)
 		return
 	}
-	response.Success(c, buildImageModelPolicyResponse(updated, capabilities))
+	result := buildImageModelPolicyResponse(updated, capabilities)
+	result.Catalog = catalog
+	response.Success(c, result)
 }
 
 func (h *ImageCanvasHandler) ListAudit(c *gin.Context) {

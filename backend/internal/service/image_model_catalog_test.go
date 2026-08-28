@@ -36,6 +36,16 @@ func (r imageModelCatalogAPIKeyRepo) ListByUserID(_ context.Context, userID int6
 	return keys, &pagination.PaginationResult{}, nil
 }
 
+func (r imageModelCatalogAPIKeyRepo) ListByGroupID(_ context.Context, groupID int64, params pagination.PaginationParams) ([]APIKey, *pagination.PaginationResult, error) {
+	keys := make([]APIKey, 0)
+	for _, key := range r.keys {
+		if key.GroupID != nil && *key.GroupID == groupID {
+			keys = append(keys, key)
+		}
+	}
+	return keys, &pagination.PaginationResult{Page: 1, PageSize: params.PageSize, Total: int64(len(keys)), Pages: 1}, nil
+}
+
 type imageModelCatalogGroupRepo struct {
 	GroupRepository
 	groups map[int64]*Group
@@ -147,6 +157,80 @@ func TestImageModelCatalogExplainsUnavailableOwnedKeys(t *testing.T) {
 	require.Equal(t, ImageCanvasAPIKeyUnavailableNoImageModel, got[0].UnavailableReason)
 	require.Equal(t, ImageCanvasAPIKeyUnavailableImageGenerationDisabled, got[1].UnavailableReason)
 	require.Equal(t, ImageCanvasAPIKeyUnavailableGroupMissing, got[2].UnavailableReason)
+}
+
+func TestImageModelCatalogAdminCoverageHonorsGroupAndKeyState(t *testing.T) {
+	groupID := int64(3)
+	group := &Group{
+		ID: groupID, Name: "images", Status: StatusActive, AllowImageGeneration: true,
+		ModelsListConfig: GroupModelsListConfig{Enabled: true, Models: []string{"model-a"}},
+	}
+	account := Account{
+		ID: 7, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+		Status: StatusActive, Schedulable: true, GroupIDs: []int64{groupID}, Groups: []*Group{group},
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{"model-a": "gpt-image-2", "model-b": "gpt-image-2"},
+		},
+	}
+	disabledKey := APIKey{ID: 43, UserID: 9, GroupID: &groupID, Status: StatusAPIKeyDisabled}
+	activeKey := APIKey{ID: 42, UserID: 9, GroupID: &groupID, Status: StatusAPIKeyActive}
+	catalog := NewImageModelCatalog(
+		imageModelCatalogAPIKeyRepo{keys: []APIKey{activeKey, disabledKey}},
+		imageModelCatalogGroupRepo{groups: map[int64]*Group{groupID: group}},
+		imageModelCatalogAccountRepo{byGroup: map[int64][]Account{groupID: {account}}},
+		nil,
+	)
+
+	entries, err := catalog.(ImageModelCatalogAdmin).ListAdmin(context.Background())
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+	byModel := make(map[string]ImageModelCatalogEntry, len(entries))
+	for _, entry := range entries {
+		byModel[entry.Model] = entry
+	}
+	require.True(t, byModel["model-a"].Schedulable)
+	require.Equal(t, ImageModelCoverage{AccountCount: 1, GroupCount: 1, APIKeyCount: 1}, byModel["model-a"].Coverage)
+	require.False(t, byModel["model-b"].Schedulable)
+	require.Equal(t, ImageModelSchedulabilityReasonGroupFiltered, byModel["model-b"].SchedulabilityReason)
+}
+
+func TestImageModelCatalogAdminRejectsUngroupedAccounts(t *testing.T) {
+	account := Account{
+		ID: 7, Platform: PlatformOpenAI, Type: AccountTypeAPIKey,
+		Status: StatusActive, Schedulable: true,
+	}
+	catalog := NewImageModelCatalog(
+		imageModelCatalogAPIKeyRepo{},
+		imageModelCatalogGroupRepo{},
+		imageModelCatalogAccountRepo{byGroup: map[int64][]Account{0: {account}}},
+		nil,
+	)
+
+	entries, err := catalog.(ImageModelCatalogAdmin).ListAdmin(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, entries)
+	for _, entry := range entries {
+		require.False(t, entry.Schedulable)
+		require.Equal(t, ImageModelSchedulabilityReasonNoGroup, entry.SchedulabilityReason)
+	}
+}
+
+func TestImageModelCatalogAdminCheckDistinguishesKnownAndUnknownModels(t *testing.T) {
+	catalog := NewImageModelCatalog(
+		imageModelCatalogAPIKeyRepo{},
+		imageModelCatalogGroupRepo{},
+		imageModelCatalogAccountRepo{},
+		nil,
+	).(ImageModelCatalogAdmin)
+
+	known, err := catalog.CheckSchedulability(context.Background(), "gpt-image-2")
+	require.NoError(t, err)
+	require.Equal(t, ImageModelSchedulabilityReasonNoAccount, known.SchedulabilityReason)
+	require.Equal(t, ImageProviderOpenAI, known.Provider)
+
+	unknown, err := catalog.CheckSchedulability(context.Background(), "not-a-real-canvas-model")
+	require.NoError(t, err)
+	require.Equal(t, ImageModelSchedulabilityReasonUnknownModel, unknown.SchedulabilityReason)
 }
 
 func TestImageCanvasAPIKeyUnavailableReasons(t *testing.T) {

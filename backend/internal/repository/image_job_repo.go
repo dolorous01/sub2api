@@ -320,6 +320,45 @@ func (r *imageJobRepository) GetAdmin(ctx context.Context, publicID string) (*se
 	return r.get(ctx, publicID, nil)
 }
 
+// ListRecentAdmin is intentionally bounded and ordered by creation time. The
+// attempt plan/log are persisted on image_jobs, so the admin console can
+// explain fallback decisions without replaying or probing an upstream
+// provider. Inputs and results are intentionally not hydrated here because
+// this endpoint does not expose them and doing so would add two queries per
+// row.
+func (r *imageJobRepository) ListRecentAdmin(ctx context.Context, limit int) ([]*service.ImageJob, error) {
+	if r == nil || r.db == nil {
+		return nil, fmt.Errorf("image job repository database is required")
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT `+imageJobColumns+`
+		FROM image_jobs
+		ORDER BY created_at DESC, id DESC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list recent admin image jobs: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	jobs := make([]*service.ImageJob, 0, limit)
+	for rows.Next() {
+		job, scanErr := scanImageJob(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan recent admin image job: %w", scanErr)
+		}
+		jobs = append(jobs, job)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate recent admin image jobs: %w", err)
+	}
+	return jobs, nil
+}
+
 func (r *imageJobRepository) get(ctx context.Context, publicID string, apiKeyID *int64) (*service.ImageJob, error) {
 	query := `SELECT ` + imageJobColumns + ` FROM image_jobs WHERE public_id = $1`
 	args := []any{publicID}

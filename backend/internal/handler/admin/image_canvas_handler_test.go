@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -42,6 +43,33 @@ func (r *adminImageCanvasPolicyRepo) ListAudit(context.Context, int) ([]service.
 
 type adminImageCanvasCatalog struct {
 	models map[string]service.ImageModelCapability
+}
+
+type adminImageCanvasCatalogWithAdmin struct {
+	adminImageCanvasCatalog
+	entries []service.ImageModelCatalogEntry
+}
+
+func (c adminImageCanvasCatalogWithAdmin) ListAdmin(context.Context) ([]service.ImageModelCatalogEntry, error) {
+	return append([]service.ImageModelCatalogEntry(nil), c.entries...), nil
+}
+
+func (c adminImageCanvasCatalogWithAdmin) CheckSchedulability(_ context.Context, model string) (service.ImageModelCatalogEntry, error) {
+	for _, entry := range c.entries {
+		if entry.Model == model {
+			return entry, nil
+		}
+	}
+	return service.ImageModelCatalogEntry{Model: model, SchedulabilityReason: service.ImageModelSchedulabilityReasonUnknownModel}, nil
+}
+
+type adminImageJobRepo struct {
+	service.ImageJobRepository
+	jobs []*service.ImageJob
+}
+
+func (r adminImageJobRepo) ListRecentAdmin(context.Context, int) ([]*service.ImageJob, error) {
+	return append([]*service.ImageJob(nil), r.jobs...), nil
 }
 
 func (c adminImageCanvasCatalog) ListOwnedAPIKeys(context.Context, int64) ([]service.ImageCanvasAPIKey, error) {
@@ -94,6 +122,30 @@ func TestAdminImageCanvasPolicyRejectsUnschedulableEnabledModel(t *testing.T) {
 	require.Equal(t, "invalid_image_model_policy", gjson.Get(response.Body.String(), "reason").String())
 }
 
+func TestAdminImageCanvasPolicyRejectsModelWithoutEligibleGroup(t *testing.T) {
+	repo := &adminImageCanvasPolicyRepo{}
+	capability := service.ImageModelCapability{Generation: true}
+	handler := &ImageCanvasHandler{
+		policies: service.NewImageModelPolicyService(repo),
+		catalog: adminImageCanvasCatalogWithAdmin{
+			adminImageCanvasCatalog: adminImageCanvasCatalog{models: map[string]service.ImageModelCapability{
+				"model-a": capability,
+			}},
+			entries: []service.ImageModelCatalogEntry{{
+				Model: "model-a", Capability: capability, Schedulable: false,
+				SchedulabilityReason: service.ImageModelSchedulabilityReasonNoGroup,
+			}},
+		},
+	}
+	router := adminImageCanvasTestRouter(handler, service.RoleAdmin)
+	body := `{"version":0,"enabled":true,"models":[{"model":"model-a","enabled":true,"position":0}]}`
+
+	response := performAdminImageCanvasJSON(t, router, http.MethodPut, "/api/v1/admin/image-canvas/model-policy", body)
+	require.Equal(t, http.StatusUnprocessableEntity, response.Code)
+	require.Equal(t, "invalid_image_model_policy", gjson.Get(response.Body.String(), "reason").String())
+	require.Zero(t, repo.policy.Version)
+}
+
 func TestAdminImageCanvasPolicyRejectsNonAdmin(t *testing.T) {
 	handler := &ImageCanvasHandler{
 		policies: service.NewImageModelPolicyService(&adminImageCanvasPolicyRepo{}),
@@ -103,6 +155,77 @@ func TestAdminImageCanvasPolicyRejectsNonAdmin(t *testing.T) {
 
 	response := performAdminImageCanvasJSON(t, router, http.MethodGet, "/api/v1/admin/image-canvas/model-policy", "")
 	require.Equal(t, http.StatusForbidden, response.Code)
+}
+
+func TestAdminImageCanvasOverviewSeparatesEntryAndPolicyState(t *testing.T) {
+	settingsRepo := &adminImageCanvasSettingsRepo{values: map[string]string{
+		service.SettingKeyImageCanvasEnabled: "true",
+	}}
+	catalog := adminImageCanvasCatalogWithAdmin{
+		adminImageCanvasCatalog: adminImageCanvasCatalog{models: map[string]service.ImageModelCapability{
+			"model-a": {Generation: true},
+		}},
+		entries: []service.ImageModelCatalogEntry{{
+			Model: "model-a", Provider: service.ImageProviderOpenAI, Schedulable: true,
+			Coverage: service.ImageModelCoverage{AccountCount: 2, GroupCount: 1, APIKeyCount: 3},
+		}},
+	}
+	handler := &ImageCanvasHandler{
+		policies: service.NewImageModelPolicyService(&adminImageCanvasPolicyRepo{policy: service.ImageModelPolicy{
+			Version: 4, Enabled: false,
+			Items: []service.ImageModelPolicyItem{{Model: "model-a", Enabled: true, Position: 0}},
+		}}),
+		catalog:  catalog,
+		settings: service.NewSettingService(settingsRepo, nil),
+	}
+	router := adminImageCanvasTestRouter(handler, service.RoleAdmin)
+
+	result := performAdminImageCanvasJSON(t, router, http.MethodGet, "/api/v1/admin/image-canvas/overview", "")
+	require.Equal(t, http.StatusOK, result.Code)
+	require.True(t, gjson.Get(result.Body.String(), "data.entry_enabled").Bool())
+	require.False(t, gjson.Get(result.Body.String(), "data.policy_enabled").Bool())
+	require.Equal(t, int64(4), gjson.Get(result.Body.String(), "data.policy_version").Int())
+	require.Equal(t, int64(1), gjson.Get(result.Body.String(), "data.active_model_count").Int())
+}
+
+func TestAdminImageCanvasModelCheckIncludesPolicyEligibility(t *testing.T) {
+	catalog := adminImageCanvasCatalogWithAdmin{
+		adminImageCanvasCatalog: adminImageCanvasCatalog{models: map[string]service.ImageModelCapability{
+			"model-a": {Generation: true},
+		}},
+		entries: []service.ImageModelCatalogEntry{{Model: "model-a", Schedulable: true}},
+	}
+	handler := &ImageCanvasHandler{
+		policies: service.NewImageModelPolicyService(&adminImageCanvasPolicyRepo{policy: service.ImageModelPolicy{
+			Version: 1, Enabled: true,
+			Items: []service.ImageModelPolicyItem{{Model: "model-a", Enabled: false, Position: 0}},
+		}}),
+		catalog: catalog,
+	}
+	router := adminImageCanvasTestRouter(handler, service.RoleAdmin)
+
+	result := performAdminImageCanvasJSON(t, router, http.MethodPost, "/api/v1/admin/image-canvas/models/model-a/check", "")
+	require.Equal(t, http.StatusOK, result.Code)
+	require.True(t, gjson.Get(result.Body.String(), "data.schedulable").Bool())
+	require.True(t, gjson.Get(result.Body.String(), "data.policy_listed").Bool())
+	require.False(t, gjson.Get(result.Body.String(), "data.policy_item_enabled").Bool())
+	require.False(t, gjson.Get(result.Body.String(), "data.eligible").Bool())
+}
+
+func TestAdminImageCanvasRecentJobsReturnsStableEmptyAttemptArrays(t *testing.T) {
+	now := time.Now()
+	repo := adminImageJobRepo{jobs: []*service.ImageJob{{
+		PublicID: "imgjob_test", Status: service.ImageJobStatusQueued,
+		Operation: "generation", RequestedModel: "model-a",
+		RequestedCount: 1, CreatedAt: now, UpdatedAt: now,
+	}}}
+	handler := &ImageCanvasHandler{jobs: service.NewImageJobService(repo, nil)}
+	router := adminImageCanvasTestRouter(handler, service.RoleAdmin)
+
+	result := performAdminImageCanvasJSON(t, router, http.MethodGet, "/api/v1/admin/image-canvas/jobs/recent", "")
+	require.Equal(t, http.StatusOK, result.Code)
+	require.True(t, gjson.Get(result.Body.String(), "data.items.0.attempt_plan").IsArray())
+	require.True(t, gjson.Get(result.Body.String(), "data.items.0.attempt_log").IsArray())
 }
 
 func adminImageCanvasTestRouter(handler *ImageCanvasHandler, role string) *gin.Engine {
@@ -116,6 +239,9 @@ func adminImageCanvasTestRouter(handler *ImageCanvasHandler, role string) *gin.E
 	router.GET("/api/v1/admin/image-canvas/model-policy", handler.GetPolicy)
 	router.PUT("/api/v1/admin/image-canvas/model-policy", handler.UpdatePolicy)
 	router.GET("/api/v1/admin/image-canvas/model-policy/audit", handler.ListAudit)
+	router.GET("/api/v1/admin/image-canvas/overview", handler.GetOverview)
+	router.POST("/api/v1/admin/image-canvas/models/:model/check", handler.CheckModel)
+	router.GET("/api/v1/admin/image-canvas/jobs/recent", handler.ListRecentJobs)
 	return router
 }
 

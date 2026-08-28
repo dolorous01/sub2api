@@ -121,9 +121,12 @@ func registerImageCanvasRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 	canvas := admin.Group("/image-canvas")
 	{
+		canvas.GET("/overview", h.Admin.ImageCanvas.GetOverview)
 		canvas.GET("/model-policy", h.Admin.ImageCanvas.GetPolicy)
 		canvas.PUT("/model-policy", h.Admin.ImageCanvas.UpdatePolicy)
 		canvas.GET("/model-policy/audit", h.Admin.ImageCanvas.ListAudit)
+		canvas.POST("/models/:model/check", h.Admin.ImageCanvas.CheckModel)
+		canvas.GET("/jobs/recent", h.Admin.ImageCanvas.ListRecentJobs)
 		canvas.GET("/runtime", h.Admin.ImageCanvas.GetRuntimeSettings)
 		canvas.PUT("/runtime", h.Admin.ImageCanvas.UpdateRuntimeSettings)
 	}

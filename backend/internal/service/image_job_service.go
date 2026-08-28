@@ -336,6 +336,26 @@ func (s *ImageJobService) GetAdmin(ctx context.Context, publicID string) (*Image
 	return s.repo.GetAdmin(ctx, strings.TrimSpace(publicID))
 }
 
+// ListRecentAdmin returns a bounded, metadata-only-friendly set of recent
+// jobs. The repository extension is optional so existing in-memory workers do
+// not have to implement an operations-only query.
+func (s *ImageJobService) ListRecentAdmin(ctx context.Context, limit int) ([]*ImageJob, error) {
+	if s == nil || s.repo == nil {
+		return nil, ErrImageJobUnavailable
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	lister, ok := s.repo.(ImageJobAdminLister)
+	if !ok {
+		return nil, ErrImageJobUnavailable
+	}
+	return lister.ListRecentAdmin(ctx, limit)
+}
+
 func (s *ImageJobService) GetOwnedResult(ctx context.Context, publicID string, apiKeyID int64, index int) (*ImageJobObject, error) {
 	job, err := s.GetOwned(ctx, publicID, apiKeyID)
 	if err != nil {

@@ -317,6 +317,13 @@ type ImageJobRepository interface {
 	MarkExpired(ctx context.Context, jobID int64, fromStatus ImageJobStatus, expiredAt time.Time) error
 }
 
+// ImageJobAdminLister is an optional repository extension used by the admin
+// operations view. Keeping it separate preserves compatibility with lightweight
+// repositories used by workers and tests.
+type ImageJobAdminLister interface {
+	ListRecentAdmin(ctx context.Context, limit int) ([]*ImageJob, error)
+}
+
 type ImageJobCanvasAttemptRepository interface {
 	SetExecutionPhase(ctx context.Context, jobID int64, attemptID, phase string) error
 	RecordImageModelAttempt(ctx context.Context, jobID int64, attemptID string, attempt ImageJobAttempt, successfulModel string) error

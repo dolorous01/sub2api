@@ -26,6 +26,8 @@ describe('admin ImageCanvasAdminView', () => {
           Icon: true,
           ModelPolicyEditor: { template: '<div data-test="policy-editor" />' },
           RuntimeSettingsEditor: { template: '<div data-test="runtime-editor" />' },
+          RecentImageJobsPanel: { template: '<div data-test="recent-jobs" />' },
+          BackendLogicPanel: { template: '<div data-test="backend-logic" />' },
           RouterLink: RouterLinkStub
         }
       }
@@ -35,6 +37,7 @@ describe('admin ImageCanvasAdminView', () => {
     expect(wrapper.find('#image-canvas-preview-tab').exists()).toBe(false)
     expect(wrapper.get('a[href="/studio"]').text()).toContain('admin.imageCanvas.openStudio')
     expect(wrapper.find('[data-test="policy-editor"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="backend-logic"]').exists()).toBe(true)
 
     await wrapper.get('#image-canvas-runtime-tab').trigger('click')
     expect(wrapper.find('[data-test="runtime-editor"]').exists()).toBe(true)

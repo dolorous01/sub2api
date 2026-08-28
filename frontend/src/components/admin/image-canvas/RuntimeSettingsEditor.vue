@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-5">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('admin.imageCanvas.runtimeTitle') }}</h2>
@@ -36,7 +36,7 @@
     </div>
 
     <template v-else-if="draft && response">
-      <section class="card p-5">
+      <section class="border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-900">
         <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
           <div>
             <div class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.imageCanvas.workerState') }}</div>
@@ -71,7 +71,7 @@
         </p>
       </section>
 
-      <section class="card p-5">
+      <section class="border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-900">
         <h3 class="font-medium text-gray-900 dark:text-white">{{ t('admin.imageCanvas.limitsTitle') }}</h3>
         <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label>
@@ -113,7 +113,7 @@
         <p v-if="validationError" class="mt-3 text-sm text-rose-600" role="alert">{{ validationError }}</p>
       </section>
 
-      <section class="card p-5">
+      <section class="border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-900">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 class="font-medium text-gray-900 dark:text-white">{{ t('admin.imageCanvas.defaultsTitle') }}</h3>
@@ -154,7 +154,7 @@
         <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">{{ t('admin.imageCanvas.noDefaultOverrides') }}</p>
       </section>
 
-      <section class="card p-5">
+      <section class="border border-gray-200 bg-white p-5 dark:border-dark-700 dark:bg-dark-900">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 class="font-medium text-gray-900 dark:text-white">{{ t('admin.imageCanvas.presetsTitle') }}</h3>
@@ -459,4 +459,6 @@ function errorMessage(error: unknown): string {
 }
 
 onMounted(load)
+
+defineExpose({ load })
 </script>
