@@ -159,8 +159,12 @@ func TestWriteImageCanvasMediaErrorMapping(t *testing.T) {
 		reason string
 	}{
 		{name: "not found", err: service.ErrCanvasMediaTaskNotFound, status: http.StatusNotFound, reason: "image_canvas_not_found"},
+		{name: "library not found", err: service.ErrImageCanvasLibraryItemNotFound, status: http.StatusNotFound, reason: "image_canvas_not_found"},
 		{name: "invalid", err: service.ErrCanvasMediaTaskInvalid, status: http.StatusBadRequest, reason: "invalid_image_canvas_request"},
+		{name: "library invalid", err: service.ErrImageCanvasLibraryItemInvalid, status: http.StatusBadRequest, reason: "invalid_image_canvas_request"},
 		{name: "conflict", err: service.ErrCanvasMediaTaskIdempotencyConflict, status: http.StatusConflict, reason: "image_canvas_job_conflict"},
+		{name: "library version conflict", err: service.ErrImageCanvasLibraryVersionConflict, status: http.StatusConflict, reason: "library_item_version_conflict"},
+		{name: "library client conflict", err: service.ErrImageCanvasLibraryClientConflict, status: http.StatusConflict, reason: "library_item_client_conflict"},
 		{name: "capability", err: service.ErrCanvasMediaCapabilityUnavailable, status: http.StatusUnprocessableEntity, reason: "invalid_media_model_selection"},
 		{name: "reservation unavailable", err: service.ErrImageJobReservationUnavailable, status: http.StatusServiceUnavailable, reason: "image_job_unavailable"},
 		{name: "upstream unavailable", err: service.ErrCanvasMediaUpstreamUnavailable, status: http.StatusServiceUnavailable, reason: "image_job_unavailable"},

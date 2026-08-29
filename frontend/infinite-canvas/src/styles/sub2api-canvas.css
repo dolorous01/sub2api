@@ -173,6 +173,39 @@
   white-space: nowrap;
 }
 
+.canvas-save-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 28px;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  padding: 0 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+button.canvas-save-status {
+  cursor: default;
+}
+
+.canvas-save-status-dirty,
+.canvas-save-status-error,
+.canvas-save-status-conflict {
+  cursor: pointer !important;
+}
+
+.canvas-save-status-dirty:hover {
+  color: var(--text);
+}
+
+.canvas-save-status-error,
+.canvas-save-status-conflict {
+  color: var(--warning);
+}
+
 .canvas-action-version {
   display: inline-flex;
   flex: 0 0 auto;
@@ -1333,6 +1366,16 @@
   }
 
   .canvas-top-bar-agent-label {
+    display: none;
+  }
+
+  .canvas-save-status {
+    width: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .canvas-save-status > span {
     display: none;
   }
 

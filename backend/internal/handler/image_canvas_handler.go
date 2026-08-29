@@ -28,6 +28,10 @@ type imageCanvasProjectService interface {
 	UploadAssetStream(context.Context, service.ImageAssetStreamUpload) (*service.ImageAsset, error)
 	GetAssetObject(context.Context, int64, string, bool) (*service.ImageJobObject, error)
 	OpenAssetObject(context.Context, int64, string, bool) (*service.ImageAssetObjectStream, error)
+	ListLibraryItems(context.Context, int64) ([]service.ImageCanvasLibraryItem, error)
+	CreateLibraryItem(context.Context, int64, service.ImageCanvasLibraryItemWrite) (*service.ImageCanvasLibraryItem, bool, error)
+	UpdateLibraryItem(context.Context, int64, string, service.ImageCanvasLibraryItemWrite) (*service.ImageCanvasLibraryItem, error)
+	DeleteLibraryItem(context.Context, int64, string) error
 }
 
 type imageCanvasJobService interface {
@@ -90,6 +94,8 @@ type imageCanvasProjectWriteRequest struct {
 }
 
 const maxImageCanvasProjectWriteRequestBytes = 9 << 20
+const maxImageCanvasAssetRequestBytes = 256 << 20
+const maxImageCanvasAssetFileBytes = 255 << 20
 
 type imageCanvasProjectResponse struct {
 	ID         string                         `json:"id"`
@@ -299,13 +305,13 @@ func (h *ImageCanvasHandler) UploadAsset(c *gin.Context) {
 	if !ok {
 		return
 	}
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, (512<<20)+(1<<20))
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxImageCanvasAssetRequestBytes)
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		writeImageCanvasError(c, service.ErrImageAssetInvalid)
 		return
 	}
-	if fileHeader.Size <= 0 || fileHeader.Size > 512<<20 {
+	if fileHeader.Size <= 0 || fileHeader.Size > maxImageCanvasAssetFileBytes {
 		writeImageCanvasError(c, service.ErrImageAssetInvalid)
 		return
 	}
@@ -582,6 +588,7 @@ func writeImageCanvasError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, service.ErrImageCanvasProjectNotFound),
 		errors.Is(err, service.ErrImageAssetNotFound),
+		errors.Is(err, service.ErrImageCanvasLibraryItemNotFound),
 		errors.Is(err, service.ErrImageEditorDocumentNotFound),
 		errors.Is(err, service.ErrImageCanvasAPIKeyNotFound),
 		errors.Is(err, service.ErrImageJobNotFound),
@@ -589,6 +596,10 @@ func writeImageCanvasError(c *gin.Context, err error) {
 		response.ErrorWithDetails(c, http.StatusNotFound, "Image canvas resource not found", "image_canvas_not_found", nil)
 	case errors.Is(err, service.ErrImageCanvasProjectVersionConflict):
 		response.ErrorWithDetails(c, http.StatusConflict, "Image canvas project was updated elsewhere", "project_version_conflict", nil)
+	case errors.Is(err, service.ErrImageCanvasLibraryVersionConflict):
+		response.ErrorWithDetails(c, http.StatusConflict, "Image canvas library item was updated elsewhere", "library_item_version_conflict", nil)
+	case errors.Is(err, service.ErrImageCanvasLibraryClientConflict):
+		response.ErrorWithDetails(c, http.StatusConflict, "Image canvas library client id is no longer reusable", "library_item_client_conflict", nil)
 	case errors.Is(err, service.ErrImageEditorDocumentVersionConflict):
 		response.ErrorWithDetails(c, http.StatusConflict, "Image editor document was updated elsewhere", "editor_version_conflict", nil)
 	case errors.Is(err, service.ErrImageEditorDocumentConflict):
@@ -597,6 +608,7 @@ func writeImageCanvasError(c *gin.Context, err error) {
 		errors.Is(err, service.ErrCanvasMediaTaskConflict), errors.Is(err, service.ErrCanvasMediaTaskIdempotencyConflict):
 		response.ErrorWithDetails(c, http.StatusConflict, err.Error(), "image_canvas_job_conflict", nil)
 	case errors.Is(err, service.ErrImageCanvasDocumentInvalid), errors.Is(err, service.ErrImageAssetInvalid),
+		errors.Is(err, service.ErrImageCanvasLibraryItemInvalid),
 		errors.Is(err, service.ErrImageEditorDocumentInvalid),
 		errors.Is(err, service.ErrImageJobInvalidRequest), errors.Is(err, service.ErrCanvasMediaTaskInvalid):
 		response.ErrorWithDetails(c, http.StatusBadRequest, err.Error(), "invalid_image_canvas_request", nil)

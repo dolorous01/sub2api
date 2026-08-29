@@ -9,16 +9,32 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-function toError(value: unknown, fallback = 'Canvas request failed'): Error & { status?: number; code?: string } {
-  const source = value as { message?: string; name?: string; status?: number; code?: string } | null
+type CanvasBridgeError = Error & {
+  status?: number
+  code?: string
+  reason?: unknown
+  metadata?: unknown
+}
+
+function toError(value: unknown, fallback = 'Canvas request failed'): CanvasBridgeError {
+  const source = value as {
+    message?: string
+    name?: string
+    status?: number
+    code?: string
+    reason?: unknown
+    metadata?: unknown
+  } | null
   if (source?.code === 'ERR_CANCELED' || source?.name === 'CanceledError') {
-    const error = new Error('Aborted') as Error & { status?: number; code?: string }
+    const error = new Error('Aborted') as CanvasBridgeError
     error.name = 'AbortError'
     return error
   }
-  const error = new Error(source?.message || fallback) as Error & { status?: number; code?: string }
+  const error = new Error(source?.message || fallback) as CanvasBridgeError
   error.status = source?.status
   error.code = source?.code
+  error.reason = source?.reason
+  error.metadata = source?.metadata
   return error
 }
 

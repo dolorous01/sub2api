@@ -19,6 +19,10 @@ var (
 	ErrImageCanvasDocumentInvalid         = errors.New("image canvas document is invalid")
 	ErrImageAssetInvalid                  = errors.New("image asset is invalid")
 	ErrImageAssetNotFound                 = errors.New("image asset not found")
+	ErrImageCanvasLibraryItemNotFound     = errors.New("image canvas library item not found")
+	ErrImageCanvasLibraryVersionConflict  = errors.New("image canvas library item version conflict")
+	ErrImageCanvasLibraryClientConflict   = errors.New("image canvas library client id conflict")
+	ErrImageCanvasLibraryItemInvalid      = errors.New("image canvas library item is invalid")
 	ErrImageCanvasModerationBlocked       = errors.New("image canvas request blocked by content moderation")
 	ErrImageEditorDocumentNotFound        = errors.New("image editor document not found")
 	ErrImageEditorDocumentConflict        = errors.New("image editor document conflict")
@@ -248,6 +252,40 @@ type ImageAssetCreate struct {
 	ParentAssetIDs     json.RawMessage
 }
 
+type ImageCanvasLibraryItem struct {
+	ID            int64           `json:"-"`
+	PublicID      string          `json:"id"`
+	ClientID      string          `json:"client_id"`
+	UserID        int64           `json:"-"`
+	Kind          string          `json:"kind"`
+	AssetID       *int64          `json:"-"`
+	AssetPublicID string          `json:"asset_id,omitempty"`
+	Title         string          `json:"title"`
+	Content       string          `json:"content,omitempty"`
+	Tags          []string        `json:"tags"`
+	Source        string          `json:"source,omitempty"`
+	Note          string          `json:"note,omitempty"`
+	Metadata      json.RawMessage `json:"metadata"`
+	Version       int64           `json:"version"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+}
+
+type ImageCanvasLibraryItemWrite struct {
+	PublicID      string
+	ClientID      string
+	UserID        int64
+	Kind          string
+	AssetPublicID string
+	Title         string
+	Content       string
+	Tags          []string
+	Source        string
+	Note          string
+	Metadata      json.RawMessage
+	Version       int64
+}
+
 type ImageEditorAssetReference struct {
 	AssetID       int64  `json:"-"`
 	AssetPublicID string `json:"asset_id"`
@@ -320,5 +358,9 @@ type ImageCanvasRepository interface {
 	DeleteProject(ctx context.Context, userID int64, publicID string) error
 	CreateAsset(ctx context.Context, input ImageAssetCreate) (*ImageAsset, error)
 	GetAsset(ctx context.Context, userID int64, publicID string) (*ImageAsset, error)
+	ListLibraryItems(ctx context.Context, userID int64) ([]ImageCanvasLibraryItem, error)
+	CreateLibraryItem(ctx context.Context, input ImageCanvasLibraryItemWrite) (*ImageCanvasLibraryItem, bool, error)
+	UpdateLibraryItem(ctx context.Context, input ImageCanvasLibraryItemWrite) (*ImageCanvasLibraryItem, error)
+	DeleteLibraryItem(ctx context.Context, userID int64, publicID string) error
 	ListOpenJobs(ctx context.Context, userID int64, projectID int64) ([]ImageJob, error)
 }

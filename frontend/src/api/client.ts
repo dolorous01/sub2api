@@ -14,10 +14,7 @@ export { buildApiUrl, buildGatewayUrl } from './url'
 export const apiClient: AxiosInstance = axios.create({
   baseURL: getAPIBaseURL(),
   withCredentials: true,
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  timeout: 30000
 })
 
 // ==================== Token Refresh State ====================

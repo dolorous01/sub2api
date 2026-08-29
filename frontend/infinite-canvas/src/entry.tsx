@@ -17,6 +17,7 @@ import {
 } from '@sub2api/host-context'
 import { clearCanvasRuntimeHost, setCanvasRuntimeHost } from '@sub2api/runtime/host-runtime'
 import { initializeCanvasProjectStore, resetCanvasProjectStore } from '@sub2api/adapters/use-canvas-store'
+import { initializeCanvasAssetStore, resetCanvasAssetStore } from '@sub2api/adapters/use-asset-store'
 import { resetCanvasAssetRuntime } from '@sub2api/adapters/asset-runtime'
 import { initializeCanvasConfigStore, resetCanvasConfigStore, useConfigStore } from '@sub2api/adapters/use-config-store'
 import CanvasProjectRuntime from '@sub2api/components/canvas-project-runtime'
@@ -117,8 +118,10 @@ export function mountCanvas(element: HTMLElement, context: CanvasHostContext): C
   setCanvasRuntimeHost(context)
   resetCanvasProjectStore()
   resetCanvasAssetRuntime()
+  resetCanvasAssetStore()
   resetCanvasConfigStore()
   void initializeCanvasProjectStore()
+  void initializeCanvasAssetStore()
   void initializeCanvasConfigStore()
   const store = createCanvasHostStore(context)
   const root = createRoot(element)
@@ -143,6 +146,7 @@ export function mountCanvas(element: HTMLElement, context: CanvasHostContext): C
       root.unmount()
       resetCanvasProjectStore()
       resetCanvasAssetRuntime()
+      resetCanvasAssetStore()
       resetCanvasConfigStore()
       clearCanvasRuntimeHost(store.getSnapshot())
       element.replaceChildren()

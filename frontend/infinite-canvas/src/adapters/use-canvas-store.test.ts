@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   api: {
     listProjects: vi.fn(),
+    createProject: vi.fn(),
+    getProject: vi.fn(),
     getMediaTask: vi.fn(),
     updateProject: vi.fn()
   },
@@ -89,6 +91,26 @@ function localProject(id: string, updatedAt: string): CanvasProject {
     viewport: { x: 0, y: 0, k: 1 },
     recoveryRevision: 0,
     recoveries: []
+  }
+}
+
+function plainServerProject(version = 1) {
+  return {
+    id: 'project-1',
+    name: 'Canvas',
+    version,
+    created_at: '2026-08-24T00:00:00Z',
+    updated_at: `2026-08-24T00:00:0${version}Z`,
+    document: {
+      schema_version: 2 as const,
+      nodes: [],
+      connections: [],
+      chat_sessions: [],
+      active_chat_id: null,
+      background_mode: 'lines',
+      show_image_info: false,
+      viewport: { x: 0, y: 0, k: 1 }
+    }
   }
 }
 
@@ -227,5 +249,88 @@ describe('canvas project recovery store', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(useCanvasStore.getState().projects[0].recoveries).toEqual([])
+  })
+})
+
+describe('canvas project save state', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.clearAllMocks()
+    mocks.drafts.getItem.mockResolvedValue(null)
+    mocks.drafts.setItem.mockResolvedValue(undefined)
+    mocks.drafts.removeItem.mockResolvedValue(undefined)
+    resetCanvasProjectStore()
+  })
+
+  afterEach(() => {
+    resetCanvasProjectStore()
+    vi.useRealTimers()
+  })
+
+  it('publishes dirty, saving, and saved while persisting the latest document', async () => {
+    let resolveUpdate!: (value: ReturnType<typeof plainServerProject>) => void
+    mocks.api.listProjects.mockResolvedValue([plainServerProject()])
+    mocks.api.updateProject.mockImplementation(() => new Promise((resolve) => {
+      resolveUpdate = resolve
+    }))
+    await initializeCanvasProjectStore()
+
+    useCanvasStore.getState().updateProject('project-1', {
+      nodes: [{ id: 'local-node', type: 'text', title: 'Local', position: { x: 0, y: 0 }, width: 320, height: 220, metadata: { content: 'draft' } }]
+    })
+    expect(useCanvasStore.getState().saveStatusByProject['project-1']?.state).toBe('dirty')
+
+    await vi.advanceTimersByTimeAsync(400)
+    expect(useCanvasStore.getState().saveStatusByProject['project-1']?.state).toBe('saving')
+
+    resolveUpdate(plainServerProject(2))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(useCanvasStore.getState().saveStatusByProject['project-1']?.state).toBe('saved')
+    expect(mocks.drafts.removeItem).toHaveBeenCalledWith('project-1')
+  })
+
+  it('keeps the local draft on conflict and can reload the server copy', async () => {
+    const server = plainServerProject(2)
+    mocks.api.listProjects.mockResolvedValue([plainServerProject()])
+    mocks.api.updateProject.mockRejectedValue({ status: 409, code: 'project_version_conflict', message: 'Conflict' })
+    mocks.api.getProject.mockResolvedValue(server)
+    await initializeCanvasProjectStore()
+
+    useCanvasStore.getState().updateProject('project-1', {
+      nodes: [{ id: 'local-node', type: 'text', title: 'Local', position: { x: 0, y: 0 }, width: 320, height: 220, metadata: { content: 'draft' } }]
+    })
+    await vi.advanceTimersByTimeAsync(400)
+    expect(useCanvasStore.getState().saveStatusByProject['project-1']?.state).toBe('conflict')
+    expect(mocks.drafts.setItem).toHaveBeenCalled()
+
+    await useCanvasStore.getState().reloadServerProject('project-1')
+    expect(useCanvasStore.getState().saveStatusByProject['project-1']?.state).toBe('saved')
+    expect(useCanvasStore.getState().projects[0].nodes).toEqual([])
+    expect(mocks.drafts.removeItem).toHaveBeenCalledWith('project-1')
+  })
+
+  it('creates a new server project from the conflicted local document', async () => {
+    mocks.api.listProjects.mockResolvedValue([plainServerProject()])
+    mocks.api.createProject.mockImplementation(async (name, document, id) => ({
+      ...plainServerProject(),
+      id,
+      name,
+      document
+    }))
+    await initializeCanvasProjectStore()
+    useCanvasStore.getState().updateProject('project-1', {
+      nodes: [{ id: 'copy-node', type: 'text', title: 'Copy', position: { x: 0, y: 0 }, width: 320, height: 220, metadata: { content: 'keep me' } }]
+    })
+
+    const id = useCanvasStore.getState().saveProjectAsNew('project-1', 'Canvas copy')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(id).toBe('generated-id')
+    expect(mocks.api.createProject).toHaveBeenCalledWith(
+      'Canvas copy',
+      expect.objectContaining({ nodes: [expect.objectContaining({ id: 'copy-node' })] }),
+      'generated-id'
+    )
+    expect(useCanvasStore.getState().saveStatusByProject['generated-id']?.state).toBe('saved')
   })
 })

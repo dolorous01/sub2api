@@ -48,9 +48,17 @@ export type CanvasProject = {
 type CanvasProjectPatch = Partial<Pick<CanvasProject,
   'nodes' | 'connections' | 'chatSessions' | 'activeChatId' | 'backgroundMode' | 'showImageInfo' | 'viewport'>>
 
+export type CanvasProjectSaveState = 'dirty' | 'saving' | 'saved' | 'error' | 'conflict'
+
+export type CanvasProjectSaveStatus = {
+  state: CanvasProjectSaveState
+  error?: string
+}
+
 type CanvasStore = {
   hydrated: boolean
   projects: CanvasProject[]
+  saveStatusByProject: Record<string, CanvasProjectSaveStatus>
   createProject: (title?: string) => string
   importProject: (project: Partial<CanvasProject>) => string
   openProject: (id: string) => CanvasProject | null
@@ -58,6 +66,10 @@ type CanvasStore = {
   deleteProjects: (ids: string[]) => void
   replaceProjects: (projects: CanvasProject[]) => void
   updateProject: (id: string, patch: CanvasProjectPatch) => void
+  flushProject: (id: string) => Promise<void>
+  retryProject: (id: string) => Promise<void>
+  reloadServerProject: (id: string) => Promise<void>
+  saveProjectAsNew: (id: string, title?: string) => string | undefined
 }
 
 type ProjectSync = {
@@ -66,6 +78,7 @@ type ProjectSync = {
   creating?: Promise<void>
   timer?: ReturnType<typeof setTimeout>
   saving: boolean
+  currentSave?: Promise<void>
   retryAfterSave: boolean
   blocked: boolean
 }
@@ -85,6 +98,15 @@ const recoveryCleanupTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let hydration: Promise<void> | undefined
 let runtimeEpoch = 0
 let activeProjectID: string | undefined
+
+function setProjectSaveStatus(id: string, state: CanvasProjectSaveState, error?: string): void {
+  useCanvasStore.setState((current) => ({
+    saveStatusByProject: {
+      ...current.saveStatusByProject,
+      [id]: { state, ...(error ? { error } : {}) }
+    }
+  }))
+}
 
 function api() {
   return createCanvasAPI(getCanvasRuntimeHost())
@@ -193,13 +215,15 @@ function migrateLegacyProject(value: ServerProject): CanvasProject {
 function scheduleSave(id: string, immediate = false): void {
   const sync = syncByProject.get(id)
   const project = useCanvasStore.getState().projects.find((item) => item.id === id)
-  if (!sync || !project || sync.blocked) return
+  if (!sync || !project) return
   if (sync.timer) clearTimeout(sync.timer)
   void drafts.setItem(id, {
     baseVersion: sync.version,
     project: sanitizeProjectValue(project) as CanvasProject,
     savedAt: Date.now()
   } satisfies DraftRecord)
+  if (sync.blocked) return
+  setProjectSaveStatus(id, 'dirty')
   sync.timer = setTimeout(() => {
     sync.timer = undefined
     void persistProject(id)
@@ -211,40 +235,122 @@ async function persistProject(id: string): Promise<void> {
   if (!sync || sync.blocked) return
   if (sync.saving) {
     sync.retryAfterSave = true
+    await sync.currentSave
     return
   }
   sync.saving = true
-  try {
-    await sync.creating
+  setProjectSaveStatus(id, 'saving')
+  const operation = (async () => {
+    try {
+      await sync.creating
+      const project = useCanvasStore.getState().projects.find((item) => item.id === id)
+      if (!project || !syncByProject.has(id)) return
+      const sequence = sync.sequence
+      const updated = await api().updateProject(id, sync.version, project.title, projectDocument(project))
+      if (!syncByProject.has(id)) return
+      sync.version = updated.version
+      useCanvasStore.setState((state) => ({
+        projects: state.projects.map((item) => item.id === id ? {
+          ...item,
+          title: updated.name,
+          createdAt: updated.created_at,
+          updatedAt: updated.updated_at
+        } : item)
+      }))
+      if (sync.sequence === sequence) {
+        await drafts.removeItem(id)
+        setProjectSaveStatus(id, 'saved')
+      } else {
+        sync.retryAfterSave = true
+        setProjectSaveStatus(id, 'dirty')
+      }
+    } catch (error) {
+      const message = readableError(error, 'Project save failed')
+      if (canvasErrorStatus(error) === 409 || canvasErrorCode(error) === 'project_version_conflict') {
+        sync.blocked = true
+        setProjectSaveStatus(id, 'conflict', message)
+        getCanvasRuntimeHost().notify('warning', i18n.t('canvas.project.conflict', { defaultValue: 'This project changed elsewhere. Your local draft was kept.' }))
+      } else {
+        setProjectSaveStatus(id, 'error', message)
+        getCanvasRuntimeHost().notify('error', message)
+      }
+    } finally {
+      sync.saving = false
+      sync.currentSave = undefined
+      if (sync.retryAfterSave && !sync.blocked) {
+        sync.retryAfterSave = false
+        await persistProject(id)
+      }
+    }
+  })()
+  sync.currentSave = operation
+  await operation
+}
+
+function beginProjectCreation(id: string, sync: ProjectSync): Promise<void> {
+  const epoch = runtimeEpoch
+  const creating = (async () => {
     const project = useCanvasStore.getState().projects.find((item) => item.id === id)
-    if (!project || !syncByProject.has(id)) return
-    const sequence = sync.sequence
-    const updated = await api().updateProject(id, sync.version, project.title, projectDocument(project))
-    if (!syncByProject.has(id)) return
-    sync.version = updated.version
-    useCanvasStore.setState((state) => ({
-      projects: state.projects.map((item) => item.id === id ? {
-        ...item,
-        title: updated.name,
-        createdAt: updated.created_at,
-        updatedAt: updated.updated_at
-      } : item)
-    }))
-    if (sync.sequence === sequence) await drafts.removeItem(id)
-    else sync.retryAfterSave = true
-  } catch (error) {
-    if (canvasErrorStatus(error) === 409 || canvasErrorCode(error) === 'project_version_conflict') {
+    if (!project) throw new Error('Project not found')
+    try {
+      const created = await api().createProject(project.title, projectDocument(project), id)
+      sync.version = created.version
+      sync.blocked = false
+      if (epoch !== runtimeEpoch || !syncByProject.has(id)) return
+      const current = useCanvasStore.getState().projects.find((item) => item.id === id)
+      useCanvasStore.setState((state) => ({
+        projects: state.projects.map((item) => item.id === id ? {
+          ...(current || serverProject(created)),
+          createdAt: created.created_at,
+          updatedAt: created.updated_at
+        } : item)
+      }))
+      if (sync.sequence === 0) {
+        await drafts.removeItem(id)
+        setProjectSaveStatus(id, 'saved')
+      } else {
+        scheduleSave(id, true)
+      }
+    } catch (error) {
+      if (epoch !== runtimeEpoch || !syncByProject.has(id)) return
       sync.blocked = true
-      getCanvasRuntimeHost().notify('warning', i18n.t('canvas.project.conflict', { defaultValue: 'This project changed elsewhere. Your local draft was kept.' }))
-    } else {
-      getCanvasRuntimeHost().notify('error', readableError(error, 'Project save failed'))
+      const message = readableError(error, 'Project creation failed')
+      setProjectSaveStatus(id, 'error', message)
+      getCanvasRuntimeHost().notify('error', message)
+      throw error
     }
-  } finally {
-    sync.saving = false
-    if (sync.retryAfterSave && !sync.blocked) {
-      sync.retryAfterSave = false
-      scheduleSave(id, true)
+  })()
+  sync.creating = creating
+  void creating.catch(() => undefined)
+  return creating
+}
+
+async function retryProjectCreation(id: string, sync: ProjectSync): Promise<void> {
+  sync.blocked = false
+  setProjectSaveStatus(id, 'saving')
+  try {
+    const existing = await api().getProject(id)
+    if (!syncByProject.has(id)) return
+    sync.version = existing.version
+    sync.creating = Promise.resolve()
+    useCanvasStore.setState((state) => ({
+      projects: state.projects.map((project) => project.id === id ? {
+        ...project,
+        createdAt: existing.created_at,
+        updatedAt: existing.updated_at
+      } : project)
+    }))
+    setProjectSaveStatus(id, 'dirty')
+    await persistProject(id)
+  } catch (error) {
+    if (canvasErrorStatus(error) === 404) {
+      await beginProjectCreation(id, sync)
+      return
     }
+    sync.blocked = true
+    const message = readableError(error, 'Project creation retry failed')
+    setProjectSaveStatus(id, 'error', message)
+    getCanvasRuntimeHost().notify('error', message)
   }
 }
 
@@ -271,33 +377,15 @@ function createOptimisticProject(source: Partial<CanvasProject>, title?: string)
   const sync: ProjectSync = { version: 0, sequence: 0, saving: false, retryAfterSave: false, blocked: false }
   syncByProject.set(id, sync)
   useCanvasStore.setState((state) => ({ projects: [project, ...state.projects] }))
-  const epoch = runtimeEpoch
-  sync.creating = api().createProject(project.title, projectDocument(project), id).then(async (created) => {
-    sync.version = created.version
-    if (epoch !== runtimeEpoch || !syncByProject.has(id)) return
-    const current = useCanvasStore.getState().projects.find((item) => item.id === id)
-    useCanvasStore.setState((state) => ({
-      projects: state.projects.map((item) => item.id === id ? {
-        ...(current || serverProject(created)),
-        createdAt: created.created_at,
-        updatedAt: created.updated_at
-      } : item)
-    }))
-    if (sync.sequence === 0) await drafts.removeItem(id)
-    else scheduleSave(id, true)
-  }).catch((error) => {
-    if (epoch !== runtimeEpoch || !syncByProject.has(id)) return
-    sync.blocked = true
-    getCanvasRuntimeHost().notify('error', readableError(error, 'Project creation failed'))
-    throw error
-  })
-  void sync.creating.catch(() => undefined)
+  setProjectSaveStatus(id, 'saving')
+  beginProjectCreation(id, sync)
   return id
 }
 
 export const useCanvasStore = create<CanvasStore>()((set, get) => ({
   hydrated: false,
   projects: [],
+  saveStatusByProject: {},
   createProject: (title) => createOptimisticProject({}, title),
   importProject: (project) => createOptimisticProject(project),
   openProject: (id) => {
@@ -329,7 +417,12 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
       syncByProject.delete(id)
       clearProjectRecoveries(id)
     }
-    set((state) => ({ projects: state.projects.filter((project) => !deleting.has(project.id)) }))
+    set((state) => ({
+      projects: state.projects.filter((project) => !deleting.has(project.id)),
+      saveStatusByProject: Object.fromEntries(
+        Object.entries(state.saveStatusByProject).filter(([id]) => !deleting.has(id))
+      )
+    }))
     void Promise.all(removed.map(async (project) => {
       const sync = removedSync.get(project.id)
       try {
@@ -347,7 +440,9 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
           retryAfterSave: false,
           blocked: true
         })
-        getCanvasRuntimeHost().notify('error', readableError(error, 'Project deletion failed'))
+        const message = readableError(error, 'Project deletion failed')
+        setProjectSaveStatus(project.id, 'error', message)
+        getCanvasRuntimeHost().notify('error', message)
       }
     }))
   },
@@ -363,6 +458,70 @@ export const useCanvasStore = create<CanvasStore>()((set, get) => ({
     const sync = syncByProject.get(id)
     if (sync) sync.sequence += 1
     scheduleSave(id)
+  },
+  flushProject: async (id) => {
+    const sync = syncByProject.get(id)
+    if (!sync || sync.blocked) return
+    if (sync.timer) {
+      clearTimeout(sync.timer)
+      sync.timer = undefined
+    }
+    if (sync.saving) {
+      await sync.currentSave
+      return
+    }
+    const status = useCanvasStore.getState().saveStatusByProject[id]?.state
+    if (status !== 'saved') await persistProject(id)
+  },
+  retryProject: async (id) => {
+    const sync = syncByProject.get(id)
+    if (!sync) return
+    const status = useCanvasStore.getState().saveStatusByProject[id]?.state
+    if (status === 'conflict') return
+    if (sync.version < 1) {
+      await retryProjectCreation(id, sync)
+      return
+    }
+    sync.blocked = false
+    if (sync.timer) {
+      clearTimeout(sync.timer)
+      sync.timer = undefined
+    }
+    await persistProject(id)
+  },
+  reloadServerProject: async (id) => {
+    const sync = syncByProject.get(id)
+    if (!sync || sync.saving) return
+    if (sync.timer) {
+      clearTimeout(sync.timer)
+      sync.timer = undefined
+    }
+    setProjectSaveStatus(id, 'saving')
+    try {
+      const value = await api().getProject(id)
+      if (!syncByProject.has(id)) return
+      clearProjectRecoveries(id)
+      sync.version = value.version
+      sync.sequence = 0
+      sync.blocked = false
+      sync.retryAfterSave = false
+      sync.creating = Promise.resolve()
+      await drafts.removeItem(id)
+      set((state) => ({
+        projects: state.projects.map((project) => project.id === id ? serverProject(value) : project)
+      }))
+      setProjectSaveStatus(id, 'saved')
+    } catch (error) {
+      const message = readableError(error, 'Server project could not be loaded')
+      setProjectSaveStatus(id, 'error', message)
+      getCanvasRuntimeHost().notify('error', message)
+    }
+  },
+  saveProjectAsNew: (id, title) => {
+    const project = get().projects.find((item) => item.id === id)
+    if (!project) return undefined
+    const nextTitle = title?.trim() || `${project.title} ${i18n.t('canvas.project.copySuffix', { defaultValue: 'copy' })}`
+    return createOptimisticProject(project, nextTitle)
   }
 }))
 
@@ -374,6 +533,7 @@ export function initializeCanvasProjectStore(): Promise<void> {
       const values = await api().listProjects()
       if (epoch !== runtimeEpoch) return
       const projects: CanvasProject[] = []
+      const saveStatusByProject: Record<string, CanvasProjectSaveStatus> = {}
       const resumableDraftIDs: string[] = []
       for (const value of values) {
         let project = serverProject(value)
@@ -432,11 +592,14 @@ export function initializeCanvasProjectStore(): Promise<void> {
           retryAfterSave: false,
           blocked
         })
+        saveStatusByProject[value.id] = {
+          state: blocked ? 'conflict' : draft || recoveryDocumentChanged ? 'dirty' : 'saved'
+        }
         projects.push(project)
         if ((draft || recoveryDocumentChanged) && !blocked) resumableDraftIDs.push(value.id)
       }
       if (epoch === runtimeEpoch) {
-        useCanvasStore.setState({ projects, hydrated: true })
+        useCanvasStore.setState({ projects, saveStatusByProject, hydrated: true })
         resumableDraftIDs.forEach((id) => scheduleSave(id, true))
         for (const [projectID, bindings] of recoveriesByProject) {
           bindings.forEach((binding) => startCanvasRecoveryMonitor(projectID, binding, epoch))
@@ -463,7 +626,7 @@ export function resetCanvasProjectStore(): void {
   for (const timer of recoveryCleanupTimers.values()) clearTimeout(timer)
   recoveryCleanupTimers.clear()
   recoveriesByProject.clear()
-  useCanvasStore.setState({ hydrated: false, projects: [] })
+  useCanvasStore.setState({ hydrated: false, projects: [], saveStatusByProject: {} })
 }
 
 export function getActiveCanvasProjectID(): string | undefined {

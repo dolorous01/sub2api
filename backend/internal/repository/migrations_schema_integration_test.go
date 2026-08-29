@@ -149,6 +149,7 @@ func TestMigrationsCreateImageCanvasSchema(t *testing.T) {
 		"image_canvas_projects",
 		"image_assets",
 		"image_canvas_asset_references",
+		"image_canvas_library_items",
 		"canvas_media_tasks",
 		"image_editor_documents",
 		"image_editor_asset_references",
@@ -177,6 +178,22 @@ func TestMigrationsCreateImageCanvasSchema(t *testing.T) {
 	requireColumn(t, tx, "image_assets", "media_kind", "character varying", 16, false)
 	requireColumn(t, tx, "image_assets", "duration_ms", "bigint", 0, false)
 	requireColumn(t, tx, "image_assets", "file_name", "character varying", 255, false)
+	requireColumn(t, tx, "image_canvas_library_items", "client_id", "character varying", 128, false)
+	requireColumn(t, tx, "image_canvas_library_items", "kind", "character varying", 16, false)
+	requireColumn(t, tx, "image_canvas_library_items", "asset_id", "bigint", 0, true)
+	requireColumn(t, tx, "image_canvas_library_items", "tags", "jsonb", 0, false)
+	requireColumn(t, tx, "image_canvas_library_items", "metadata", "jsonb", 0, false)
+	requireColumn(t, tx, "image_canvas_library_items", "version", "bigint", 0, false)
+	requireColumn(t, tx, "image_canvas_library_items", "deleted_at", "timestamp with time zone", 0, true)
+	requireConstraintDefinitionContains(
+		t,
+		tx,
+		"image_canvas_library_items",
+		"image_canvas_library_items_user_client_unique",
+		"UNIQUE",
+		"user_id",
+		"client_id",
+	)
 	requireColumn(t, tx, "canvas_media_tasks", "kind", "character varying", 16, false)
 	requireColumn(t, tx, "canvas_media_tasks", "request", "jsonb", 0, false)
 	requireColumn(t, tx, "canvas_media_tasks", "result_asset_id", "bigint", 0, true)
@@ -188,6 +205,8 @@ func TestMigrationsCreateImageCanvasSchema(t *testing.T) {
 	requireIndex(t, tx, "image_assets", "idx_image_assets_owner_project")
 	requireIndex(t, tx, "image_assets", "idx_image_assets_owner_kind_created")
 	requireIndex(t, tx, "image_canvas_asset_references", "idx_image_canvas_asset_references_asset")
+	requireIndex(t, tx, "image_canvas_library_items", "idx_image_canvas_library_items_user_updated")
+	requireIndex(t, tx, "image_canvas_library_items", "idx_image_canvas_library_items_asset")
 	requireIndex(t, tx, "image_jobs", "idx_image_jobs_project_created")
 	requireIndex(t, tx, "canvas_media_tasks", "idx_canvas_media_tasks_claim")
 	requireIndex(t, tx, "canvas_media_tasks", "idx_canvas_media_tasks_user_project")

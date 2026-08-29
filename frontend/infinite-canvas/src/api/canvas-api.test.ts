@@ -174,4 +174,37 @@ describe('createCanvasAPI', () => {
     expect(form.get('file')).toBe(file)
     expect(form.get('parent_asset_id')).toBe('asset-1')
   })
+
+  it('uses the authenticated library item routes', async () => {
+    const item = {
+      id: 'library-1', client_id: 'local-1', kind: 'text', title: 'Prompt', content: 'Hello',
+      tags: [], metadata: {}, version: 1, created_at: '2026-08-28T00:00:00Z', updated_at: '2026-08-28T00:00:00Z'
+    }
+    const request = vi.fn()
+      .mockResolvedValueOnce({ items: [item] })
+      .mockResolvedValueOnce(item)
+      .mockResolvedValueOnce({ ...item, version: 2 })
+      .mockResolvedValueOnce(undefined)
+    const api = createCanvasAPI({ request } as unknown as CanvasHostContext)
+
+    expect(await api.listLibraryItems()).toEqual([item])
+    await api.createLibraryItem({ client_id: 'local-1', kind: 'text', title: 'Prompt', content: 'Hello', tags: [] })
+    await api.updateLibraryItem('library/id', { version: 1, kind: 'text', title: 'Prompt 2', content: 'Hello', tags: [] })
+    await api.deleteLibraryItem('library/id')
+
+    expect(request).toHaveBeenNthCalledWith(1, 'GET', '/image-canvas/library-items', undefined, undefined)
+    expect(request).toHaveBeenNthCalledWith(2, 'POST', '/image-canvas/library-items', expect.objectContaining({ client_id: 'local-1' }), undefined)
+    expect(request).toHaveBeenNthCalledWith(3, 'PATCH', '/image-canvas/library-items/library%2Fid', expect.objectContaining({ version: 1 }), undefined)
+    expect(request).toHaveBeenNthCalledWith(4, 'DELETE', '/image-canvas/library-items/library%2Fid', undefined, undefined)
+  })
+
+  it('requests the authenticated thumbnail stream when needed', async () => {
+    const stream = chunkedStream('thumbnail')
+    const host = { request: vi.fn(), stream: vi.fn().mockResolvedValue(stream) } as unknown as CanvasHostContext
+
+    const blob = await createCanvasAPI(host).getAssetBlob('asset/id', undefined, true)
+
+    expect(blob.size).toBe('thumbnail'.length)
+    expect(host.stream).toHaveBeenCalledWith('/image-canvas/assets/asset%2Fid?thumbnail=true', { signal: undefined })
+  })
 })

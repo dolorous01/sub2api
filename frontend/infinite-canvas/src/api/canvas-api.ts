@@ -131,6 +131,39 @@ export interface CanvasAsset {
   thumbnail_url?: string
 }
 
+export type CanvasLibraryItemKind = 'text' | 'image' | 'video' | 'audio'
+
+export interface CanvasLibraryItem {
+  id: string
+  client_id: string
+  kind: CanvasLibraryItemKind
+  asset_id?: string
+  asset_url?: string
+  thumbnail_url?: string
+  title: string
+  content?: string
+  tags: string[]
+  source?: string
+  note?: string
+  metadata: Record<string, unknown>
+  version: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CanvasLibraryItemWrite {
+  client_id?: string
+  version?: number
+  kind: CanvasLibraryItemKind
+  asset_id?: string
+  title: string
+  content?: string
+  tags: string[]
+  source?: string
+  note?: string
+  metadata?: Record<string, unknown>
+}
+
 export interface ImageEditorDocumentV1 {
   schema_version: 1
   viewport: { zoom: number; x: number; y: number }
@@ -309,6 +342,10 @@ export interface CanvasAPI {
   updateProject(id: string, version: number, name: string, document: CanvasDocument): Promise<CanvasProject>
   deleteProject(id: string): Promise<void>
   uploadAsset(file: File, projectID?: string, metadata?: { width?: number; height?: number; durationMs?: number }): Promise<CanvasAsset>
+  listLibraryItems(): Promise<CanvasLibraryItem[]>
+  createLibraryItem(input: CanvasLibraryItemWrite): Promise<CanvasLibraryItem>
+  updateLibraryItem(id: string, input: CanvasLibraryItemWrite): Promise<CanvasLibraryItem>
+  deleteLibraryItem(id: string): Promise<void>
   createJob(input: CanvasJobCreate, idempotencyKey: string): Promise<CanvasJob>
   getJob(id: string): Promise<CanvasJob>
   cancelJob(id: string): Promise<CanvasJob>
@@ -317,7 +354,7 @@ export interface CanvasAPI {
   generateAudio(input: CanvasAudioGenerate, idempotencyKey: string, signal?: AbortSignal): Promise<CanvasMediaTask>
   getMediaTask(id: string, signal?: AbortSignal): Promise<CanvasMediaTask>
   cancelMediaTask(id: string): Promise<CanvasMediaTask>
-  getAssetBlob(id: string, signal?: AbortSignal): Promise<Blob>
+  getAssetBlob(id: string, signal?: AbortSignal, thumbnail?: boolean): Promise<Blob>
   createEditorDocument(input: ImageEditorDocumentCreate): Promise<ImageEditorDocument>
   getEditorDocument(id: string): Promise<ImageEditorDocument>
   updateEditorDocument(id: string, input: ImageEditorDocumentUpdate): Promise<ImageEditorDocument>
@@ -364,6 +401,13 @@ export function createCanvasAPI(host: CanvasHostContext): CanvasAPI {
       if (metadata?.durationMs) form.append('duration_ms', String(metadata.durationMs))
       return request('POST', '/assets', form)
     },
+    async listLibraryItems() {
+      const result = await request<{ items: CanvasLibraryItem[] }>('GET', '/library-items')
+      return result.items
+    },
+    createLibraryItem: (input) => request('POST', '/library-items', input),
+    updateLibraryItem: (id, input) => request('PATCH', `/library-items/${encodeURIComponent(id)}`, input),
+    deleteLibraryItem: (id) => request('DELETE', `/library-items/${encodeURIComponent(id)}`),
     createJob: (input, key) => request('POST', '/jobs', input, { 'Idempotency-Key': key }),
     getJob: (id) => request('GET', `/jobs/${encodeURIComponent(id)}`),
     cancelJob: (id) => request('DELETE', `/jobs/${encodeURIComponent(id)}`),
@@ -377,8 +421,9 @@ export function createCanvasAPI(host: CanvasHostContext): CanvasAPI {
     generateAudio: (input, key, signal) => request('POST', '/media/audio', input, { 'Idempotency-Key': key }, { signal, timeoutMs: 10 * 60_000 }),
     getMediaTask: (id, signal) => request('GET', `/media/tasks/${encodeURIComponent(id)}`, undefined, undefined, { signal }),
     cancelMediaTask: (id) => request('DELETE', `/media/tasks/${encodeURIComponent(id)}`),
-    async getAssetBlob(id, signal) {
-      const stream = await host.stream(`/image-canvas/assets/${encodeURIComponent(id)}`, { signal })
+    async getAssetBlob(id, signal, thumbnail = false) {
+      const suffix = thumbnail ? '?thumbnail=true' : ''
+      const stream = await host.stream(`/image-canvas/assets/${encodeURIComponent(id)}${suffix}`, { signal })
       return new Response(stream).blob()
     },
     createEditorDocument: (input) => request('POST', '/editor-documents', input),

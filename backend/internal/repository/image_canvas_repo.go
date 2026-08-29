@@ -250,6 +250,182 @@ func (r *imageCanvasRepository) GetAsset(ctx context.Context, userID int64, publ
 	return asset, nil
 }
 
+func (r *imageCanvasRepository) ListLibraryItems(ctx context.Context, userID int64) ([]service.ImageCanvasLibraryItem, error) {
+	if r == nil || r.db == nil {
+		return nil, fmt.Errorf("image canvas database is required")
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT item.id, item.public_id, item.client_id, item.user_id, item.kind, item.asset_id,
+			COALESCE(asset.public_id, ''), item.title, item.content, item.tags, item.source,
+			item.note, item.metadata, item.version, item.created_at, item.updated_at
+		FROM image_canvas_library_items item
+		LEFT JOIN image_assets asset ON asset.id = item.asset_id
+		WHERE item.user_id = $1 AND item.deleted_at IS NULL
+		ORDER BY item.updated_at DESC, item.id DESC`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list image canvas library items: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := make([]service.ImageCanvasLibraryItem, 0)
+	for rows.Next() {
+		item, scanErr := scanImageCanvasLibraryItem(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan image canvas library item: %w", scanErr)
+		}
+		items = append(items, *item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate image canvas library items: %w", err)
+	}
+	return items, nil
+}
+
+func (r *imageCanvasRepository) CreateLibraryItem(
+	ctx context.Context,
+	input service.ImageCanvasLibraryItemWrite,
+) (*service.ImageCanvasLibraryItem, bool, error) {
+	if r == nil || r.db == nil {
+		return nil, false, fmt.Errorf("image canvas database is required")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, false, fmt.Errorf("begin image canvas library item create: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	assetID, err := resolveImageCanvasLibraryAssetID(ctx, tx, input.UserID, input.Kind, input.AssetPublicID)
+	if err != nil {
+		return nil, false, err
+	}
+	tags, err := json.Marshal(input.Tags)
+	if err != nil {
+		return nil, false, service.ErrImageCanvasLibraryItemInvalid
+	}
+	publicID := strings.TrimSpace(input.PublicID)
+	if publicID == "" {
+		publicID = newImageCanvasPublicID("lib")
+	}
+	item, err := scanImageCanvasLibraryItem(tx.QueryRowContext(ctx, `
+		WITH inserted AS (
+			INSERT INTO image_canvas_library_items (
+				public_id, client_id, user_id, kind, asset_id, title, content, tags, source, note, metadata
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11::jsonb)
+			ON CONFLICT (user_id, client_id) DO NOTHING
+			RETURNING *
+		)
+		SELECT item.id, item.public_id, item.client_id, item.user_id, item.kind, item.asset_id,
+			COALESCE(asset.public_id, ''), item.title, item.content, item.tags, item.source,
+			item.note, item.metadata, item.version, item.created_at, item.updated_at
+		FROM inserted item
+		LEFT JOIN image_assets asset ON asset.id = item.asset_id`,
+		publicID, input.ClientID, input.UserID, input.Kind, nullableInt64Pointer(assetID), input.Title,
+		input.Content, string(tags), input.Source, input.Note, string(input.Metadata)))
+	created := true
+	if errors.Is(err, sql.ErrNoRows) {
+		created = false
+		item, err = scanImageCanvasLibraryItem(tx.QueryRowContext(ctx, `
+			SELECT item.id, item.public_id, item.client_id, item.user_id, item.kind, item.asset_id,
+				COALESCE(asset.public_id, ''), item.title, item.content, item.tags, item.source,
+				item.note, item.metadata, item.version, item.created_at, item.updated_at
+			FROM image_canvas_library_items item
+			LEFT JOIN image_assets asset ON asset.id = item.asset_id
+			WHERE item.user_id = $1 AND item.client_id = $2 AND item.deleted_at IS NULL`, input.UserID, input.ClientID))
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, service.ErrImageCanvasLibraryClientConflict
+		}
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("create image canvas library item: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, false, fmt.Errorf("commit image canvas library item create: %w", err)
+	}
+	return item, created, nil
+}
+
+func (r *imageCanvasRepository) UpdateLibraryItem(
+	ctx context.Context,
+	input service.ImageCanvasLibraryItemWrite,
+) (*service.ImageCanvasLibraryItem, error) {
+	if r == nil || r.db == nil {
+		return nil, fmt.Errorf("image canvas database is required")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin image canvas library item update: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	assetID, err := resolveImageCanvasLibraryAssetID(ctx, tx, input.UserID, input.Kind, input.AssetPublicID)
+	if err != nil {
+		return nil, err
+	}
+	tags, err := json.Marshal(input.Tags)
+	if err != nil {
+		return nil, service.ErrImageCanvasLibraryItemInvalid
+	}
+	item, err := scanImageCanvasLibraryItem(tx.QueryRowContext(ctx, `
+		WITH updated AS (
+			UPDATE image_canvas_library_items
+			SET kind = $4, asset_id = $5, title = $6, content = $7, tags = $8::jsonb,
+				source = $9, note = $10, metadata = $11::jsonb,
+				version = version + 1, updated_at = NOW()
+			WHERE public_id = $1 AND user_id = $2 AND version = $3 AND deleted_at IS NULL
+			RETURNING *
+		)
+		SELECT updated_item.id, updated_item.public_id, updated_item.client_id, updated_item.user_id, updated_item.kind, updated_item.asset_id,
+			COALESCE(asset.public_id, ''), updated_item.title, updated_item.content, updated_item.tags, updated_item.source,
+			updated_item.note, updated_item.metadata, updated_item.version, updated_item.created_at, updated_item.updated_at
+		FROM updated updated_item
+		LEFT JOIN image_assets asset ON asset.id = updated_item.asset_id`,
+		input.PublicID, input.UserID, input.Version, input.Kind, nullableInt64Pointer(assetID), input.Title,
+		input.Content, string(tags), input.Source, input.Note, string(input.Metadata)))
+	if errors.Is(err, sql.ErrNoRows) {
+		var exists bool
+		lookupErr := tx.QueryRowContext(ctx, `
+			SELECT EXISTS(
+				SELECT 1 FROM image_canvas_library_items
+				WHERE public_id = $1 AND user_id = $2 AND deleted_at IS NULL
+			)`, input.PublicID, input.UserID).Scan(&exists)
+		if lookupErr != nil {
+			return nil, fmt.Errorf("resolve image canvas library update conflict: %w", lookupErr)
+		}
+		if exists {
+			return nil, service.ErrImageCanvasLibraryVersionConflict
+		}
+		return nil, service.ErrImageCanvasLibraryItemNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("update image canvas library item: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit image canvas library item update: %w", err)
+	}
+	return item, nil
+}
+
+func (r *imageCanvasRepository) DeleteLibraryItem(ctx context.Context, userID int64, publicID string) error {
+	if r == nil || r.db == nil {
+		return fmt.Errorf("image canvas database is required")
+	}
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE image_canvas_library_items
+		SET deleted_at = NOW(), updated_at = NOW()
+		WHERE public_id = $1 AND user_id = $2 AND deleted_at IS NULL`, strings.TrimSpace(publicID), userID)
+	if err != nil {
+		return fmt.Errorf("delete image canvas library item: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read image canvas library item delete result: %w", err)
+	}
+	if affected == 0 {
+		return service.ErrImageCanvasLibraryItemNotFound
+	}
+	return nil
+}
+
 func (r *imageCanvasRepository) ListOpenJobs(ctx context.Context, userID int64, projectID int64) ([]service.ImageJob, error) {
 	if r == nil || r.db == nil {
 		return nil, fmt.Errorf("image canvas database is required")
@@ -324,6 +500,55 @@ func scanImageAsset(scanner imageCanvasScanner) (*service.ImageAsset, error) {
 	asset.ThumbnailObjectKey = thumbnailObjectKey.String
 	asset.ParentAssetIDs = append(json.RawMessage(nil), parentIDs...)
 	return asset, nil
+}
+
+func scanImageCanvasLibraryItem(scanner imageCanvasScanner) (*service.ImageCanvasLibraryItem, error) {
+	item := &service.ImageCanvasLibraryItem{}
+	var assetID sql.NullInt64
+	var tags, metadata []byte
+	if err := scanner.Scan(
+		&item.ID, &item.PublicID, &item.ClientID, &item.UserID, &item.Kind, &assetID,
+		&item.AssetPublicID, &item.Title, &item.Content, &tags, &item.Source,
+		&item.Note, &metadata, &item.Version, &item.CreatedAt, &item.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	item.AssetID = nullInt64Pointer(assetID)
+	item.Tags = make([]string, 0)
+	if len(tags) > 0 {
+		if err := json.Unmarshal(tags, &item.Tags); err != nil {
+			return nil, err
+		}
+	}
+	item.Metadata = append(json.RawMessage(nil), metadata...)
+	return item, nil
+}
+
+func resolveImageCanvasLibraryAssetID(
+	ctx context.Context,
+	tx *sql.Tx,
+	userID int64,
+	kind, publicID string,
+) (*int64, error) {
+	if kind == "text" {
+		return nil, nil
+	}
+	var id int64
+	var mediaKind string
+	err := tx.QueryRowContext(ctx, `
+		SELECT id, media_kind
+		FROM image_assets
+		WHERE public_id = $1 AND owner_user_id = $2 AND deleted_at IS NULL`, strings.TrimSpace(publicID), userID).Scan(&id, &mediaKind)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, service.ErrImageAssetNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("resolve image canvas library asset: %w", err)
+	}
+	if mediaKind != kind {
+		return nil, service.ErrImageCanvasLibraryItemInvalid
+	}
+	return &id, nil
 }
 
 func replaceImageCanvasAssetReferences(

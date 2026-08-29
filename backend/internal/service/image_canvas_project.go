@@ -32,7 +32,7 @@ const (
 	maxImageCanvasEdges         = 4000
 	maxImageCanvasAssetBytes    = 64 << 20
 	maxAudioCanvasAssetBytes    = 128 << 20
-	maxVideoCanvasAssetBytes    = 512 << 20
+	maxVideoCanvasAssetBytes    = 255 << 20
 	maxImageCanvasAssetPixels   = 40_000_000
 	maxCanvasMediaEdge          = 16_384
 	maxCanvasMediaDurationMS    = 24 * 60 * 60 * 1000
@@ -157,7 +157,7 @@ func (s *ImageCanvasProjectService) UploadAsset(ctx context.Context, input Image
 		return nil, fmt.Errorf("image canvas asset dependencies are required")
 	}
 	if input.UserID <= 0 || len(input.Data) == 0 || len(input.Data) > maxVideoCanvasAssetBytes {
-		return nil, fmt.Errorf("%w: upload must be between 1 byte and 512 MiB", ErrImageAssetInvalid)
+		return nil, fmt.Errorf("%w: upload must be between 1 byte and 255 MiB", ErrImageAssetInvalid)
 	}
 	mediaKind, mimeType, extension, err := detectImageCanvasAssetType(input.Data, input.MIMEType)
 	if err != nil {
@@ -619,14 +619,14 @@ type ImageAssetObjectStream struct {
 }
 
 // UploadAssetStream validates media from a disk-backed staging file and then
-// streams it into object storage. This keeps 512 MiB video uploads bounded by
+// streams it into object storage. This keeps large video uploads bounded by
 // disk space instead of process memory.
 func (s *ImageCanvasProjectService) UploadAssetStream(ctx context.Context, input ImageAssetStreamUpload) (*ImageAsset, error) {
 	if s == nil || s.repository == nil || s.store == nil {
 		return nil, fmt.Errorf("image canvas asset dependencies are required")
 	}
 	if input.UserID <= 0 || input.Reader == nil || input.ByteSize <= 0 || input.ByteSize > maxVideoCanvasAssetBytes {
-		return nil, fmt.Errorf("%w: upload must be between 1 byte and 512 MiB", ErrImageAssetInvalid)
+		return nil, fmt.Errorf("%w: upload must be between 1 byte and 255 MiB", ErrImageAssetInvalid)
 	}
 	staging, err := os.CreateTemp("", "sub2api-canvas-media-*")
 	if err != nil {
