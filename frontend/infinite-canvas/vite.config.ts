@@ -64,6 +64,10 @@ export default defineConfig(({ mode }) => {
           replacement: resolve(__dirname, 'src/overrides/components/canvas/canvas-top-bar.tsx')
         },
         {
+          find: /^@\/stores\/use-canvas-side-panel-store$/,
+          replacement: resolve(__dirname, 'src/overrides/stores/use-canvas-side-panel-store.ts')
+        },
+        {
           find: /^@\/i18n\/locales\/en-US$/,
           replacement: resolve(__dirname, 'src/overrides/i18n/locales/en-US.ts')
         },

@@ -25,6 +25,7 @@
       "@/i18n/locales/en-US": ["src/overrides/i18n/locales/en-US.ts"],
       "@/i18n/locales/zh-CN": ["src/overrides/i18n/locales/zh-CN.ts"],
       "@/stores/canvas/use-canvas-store": ["src/adapters/use-canvas-store.ts"],
+      "@/stores/use-canvas-side-panel-store": ["src/overrides/stores/use-canvas-side-panel-store.ts"],
       "@/stores/use-config-store": ["src/adapters/use-config-store.ts"],
       "@/stores/use-asset-store": ["src/adapters/use-asset-store.ts"],
       "@/services/image-storage": ["src/adapters/image-storage.ts"],

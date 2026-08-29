@@ -1,5 +1,5 @@
 // Sub2API-owned UI override for the pinned upstream module.
-import { memo, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { App, Empty, Input, Popconfirm, Select, Spin, Tag } from "antd";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Check, ChevronRight, Download, Eye, FileText, Image as ImageIcon, ListChecks, Music2, Plus, Search, Settings2, Square, Trash2, Type, Video } from "lucide-react";
@@ -16,7 +16,7 @@ import { uploadMediaFile } from "@/services/file-storage";
 import { uploadImage } from "@/services/image-storage";
 import { useAssetStore, type Asset, type AssetKind } from "@/stores/use-asset-store";
 import { usePromptSourceStore } from "@/stores/use-prompt-source-store";
-import { CANVAS_SIDE_PANEL_MAX_WIDTH, CANVAS_SIDE_PANEL_MIN_WIDTH, CANVAS_SIDE_PANEL_MOTION_MS, useCanvasSidePanelStore } from "@/stores/use-canvas-side-panel-store";
+import { CANVAS_SIDE_PANEL_COMPACT_WIDTH, CANVAS_SIDE_PANEL_MAX_WIDTH, CANVAS_SIDE_PANEL_MIN_WIDTH, CANVAS_SIDE_PANEL_MOTION_MS, useCanvasSidePanelStore } from "@/stores/use-canvas-side-panel-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 
@@ -60,7 +60,21 @@ export function CanvasSidePanel({ nodes, selectedNodeIds, onFocusNode, onPreview
     const panelMounted = useCanvasSidePanelStore((state) => state.panelMounted);
     const panelClosing = useCanvasSidePanelStore((state) => state.panelClosing);
     const setWidth = useCanvasSidePanelStore((state) => state.setWidth);
+    const setResponsiveCompact = useCanvasSidePanelStore((state) => state.setResponsiveCompact);
     const [resizing, setResizing] = useState(false);
+
+    useEffect(() => {
+        const host = document.querySelector<HTMLElement>(".image-canvas-host");
+        const update = () => setResponsiveCompact((host?.getBoundingClientRect().width || window.innerWidth) <= CANVAS_SIDE_PANEL_COMPACT_WIDTH);
+        update();
+        if (host && typeof ResizeObserver !== "undefined") {
+            const observer = new ResizeObserver(update);
+            observer.observe(host);
+            return () => observer.disconnect();
+        }
+        window.addEventListener("resize", update);
+        return () => window.removeEventListener("resize", update);
+    }, [setResponsiveCompact]);
 
     const startResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
         event.preventDefault();
