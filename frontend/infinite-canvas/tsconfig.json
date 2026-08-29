@@ -22,6 +22,7 @@
       "@/components/canvas/asset-picker-modal": ["src/overrides/components/canvas/asset-picker-modal.tsx"],
       "@/components/canvas/canvas-side-panel": ["src/overrides/components/canvas/canvas-side-panel.tsx"],
       "@/components/canvas/canvas-top-bar": ["src/overrides/components/canvas/canvas-top-bar.tsx"],
+      "@/components/canvas/canvas-prompt-chip-input": ["src/overrides/components/canvas/canvas-prompt-chip-input.tsx"],
       "@/i18n/locales/en-US": ["src/overrides/i18n/locales/en-US.ts"],
       "@/i18n/locales/zh-CN": ["src/overrides/i18n/locales/zh-CN.ts"],
       "@/stores/canvas/use-canvas-store": ["src/adapters/use-canvas-store.ts"],

@@ -64,6 +64,14 @@ export default defineConfig(({ mode }) => {
           replacement: resolve(__dirname, 'src/overrides/components/canvas/canvas-top-bar.tsx')
         },
         {
+          find: /^@\/components\/canvas\/canvas-prompt-chip-input$/,
+          replacement: resolve(__dirname, 'src/overrides/components/canvas/canvas-prompt-chip-input.tsx')
+        },
+        {
+          find: /^\.\/canvas-prompt-chip-input$/,
+          replacement: resolve(__dirname, 'src/overrides/components/canvas/canvas-prompt-chip-input.tsx')
+        },
+        {
           find: /^@\/stores\/use-canvas-side-panel-store$/,
           replacement: resolve(__dirname, 'src/overrides/stores/use-canvas-side-panel-store.ts')
         },

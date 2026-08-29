@@ -11,6 +11,8 @@ export default defineConfig({
       { find: /^@\/components\/canvas\/asset-picker-modal$/, replacement: resolve(__dirname, 'src/overrides/components/canvas/asset-picker-modal.tsx') },
       { find: /^@\/components\/canvas\/canvas-side-panel$/, replacement: resolve(__dirname, 'src/overrides/components/canvas/canvas-side-panel.tsx') },
       { find: /^@\/components\/canvas\/canvas-top-bar$/, replacement: resolve(__dirname, 'src/overrides/components/canvas/canvas-top-bar.tsx') },
+      { find: /^@\/components\/canvas\/canvas-prompt-chip-input$/, replacement: resolve(__dirname, 'src/overrides/components/canvas/canvas-prompt-chip-input.tsx') },
+      { find: /^\.\/canvas-prompt-chip-input$/, replacement: resolve(__dirname, 'src/overrides/components/canvas/canvas-prompt-chip-input.tsx') },
       { find: /^@\/i18n\/locales\/en-US$/, replacement: resolve(__dirname, 'src/overrides/i18n/locales/en-US.ts') },
       { find: /^@\/i18n\/locales\/zh-CN$/, replacement: resolve(__dirname, 'src/overrides/i18n/locales/zh-CN.ts') },
       { find: '@/stores/canvas/use-canvas-store', replacement: resolve(__dirname, 'src/adapters/use-canvas-store.ts') },
