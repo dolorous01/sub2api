@@ -237,7 +237,7 @@ func (h *ImageCanvasHandler) GetOverview(c *gin.Context) {
 	}
 	activeModels := 0
 	for _, item := range catalog {
-		if item.Schedulable {
+		if item.Schedulable && strings.EqualFold(strings.TrimSpace(item.MediaKind), "image") {
 			activeModels++
 		}
 	}

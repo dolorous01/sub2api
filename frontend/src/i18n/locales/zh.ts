@@ -1568,7 +1568,7 @@ export default {
       modelPolicySwitch: '模型策略开关',
       modelPolicySwitchHint: '控制模型选择与回退链',
       modelPolicyVersion: '策略版本 v{version}',
-      activeModels: '当前可调度模型',
+      activeModels: '当前可调度图片模型',
       fallbackStatus: '图片按链回退，音视频只做准入',
       providerMedia: '供应商 / 媒体',
       coverage: '覆盖范围（账号 / 分组 / Key）',

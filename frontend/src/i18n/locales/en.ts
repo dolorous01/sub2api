@@ -1564,7 +1564,7 @@ export default {
       modelPolicySwitch: 'Model policy switch',
       modelPolicySwitchHint: 'Controls model selection and fallback',
       modelPolicyVersion: 'Policy version v{version}',
-      activeModels: 'Schedulable models',
+      activeModels: 'Schedulable image models',
       fallbackStatus: 'Image fallback chain; media admission only',
       providerMedia: 'Provider / media',
       coverage: 'Coverage (accounts / groups / keys)',

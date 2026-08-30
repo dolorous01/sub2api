@@ -166,7 +166,7 @@ func TestAdminImageCanvasOverviewSeparatesEntryAndPolicyState(t *testing.T) {
 			"model-a": {Generation: true},
 		}},
 		entries: []service.ImageModelCatalogEntry{{
-			Model: "model-a", Provider: service.ImageProviderOpenAI, Schedulable: true,
+			Model: "model-a", Provider: service.ImageProviderOpenAI, MediaKind: "image", Schedulable: true,
 			Coverage: service.ImageModelCoverage{AccountCount: 2, GroupCount: 1, APIKeyCount: 3},
 		}},
 	}
@@ -186,6 +186,23 @@ func TestAdminImageCanvasOverviewSeparatesEntryAndPolicyState(t *testing.T) {
 	require.False(t, gjson.Get(result.Body.String(), "data.policy_enabled").Bool())
 	require.Equal(t, int64(4), gjson.Get(result.Body.String(), "data.policy_version").Int())
 	require.Equal(t, int64(1), gjson.Get(result.Body.String(), "data.active_model_count").Int())
+}
+
+func TestAdminImageCanvasOverviewCountsOnlySchedulableImageModels(t *testing.T) {
+	handler := &ImageCanvasHandler{
+		catalog: adminImageCanvasCatalogWithAdmin{entries: []service.ImageModelCatalogEntry{
+			{Model: "image-ready", MediaKind: "image", Schedulable: true},
+			{Model: "image-blocked", MediaKind: "image", Schedulable: false},
+			{Model: "video-ready", MediaKind: "video", Schedulable: true},
+			{Model: "audio-ready", MediaKind: "audio", Schedulable: true},
+		}},
+	}
+	router := adminImageCanvasTestRouter(handler, service.RoleAdmin)
+
+	result := performAdminImageCanvasJSON(t, router, http.MethodGet, "/api/v1/admin/image-canvas/overview", "")
+	require.Equal(t, http.StatusOK, result.Code)
+	require.Equal(t, int64(1), gjson.Get(result.Body.String(), "data.active_model_count").Int())
+	require.Len(t, gjson.Get(result.Body.String(), "data.catalog").Array(), 4)
 }
 
 func TestAdminImageCanvasModelCheckIncludesPolicyEligibility(t *testing.T) {
