@@ -41,19 +41,28 @@
             <span class="text-sm font-medium text-gray-700 dark:text-dark-300">{{
               t('version.currentVersion')
             }}</span>
-            <button
-              @click="refreshVersion(true)"
-              class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-dark-200"
-              :disabled="loading"
-              :title="t('version.refresh')"
-            >
-              <Icon
-                name="refresh"
-                size="sm"
-                :stroke-width="2"
-                :class="{ 'animate-spin': loading }"
-              />
-            </button>
+            <div class="flex items-center gap-1">
+              <button
+                @click="openDeploymentCenter"
+                class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-dark-200"
+                :title="t('deployment.title')"
+              >
+                <Icon name="server" size="sm" :stroke-width="2" />
+              </button>
+              <button
+                @click="refreshVersion(true)"
+                class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-dark-200"
+                :disabled="loading"
+                :title="t('version.refresh')"
+              >
+                <Icon
+                  name="refresh"
+                  size="sm"
+                  :stroke-width="2"
+                  :class="{ 'animate-spin': loading }"
+                />
+              </button>
+            </div>
           </div>
 
           <div class="p-4">
@@ -625,6 +634,15 @@
                 </div>
               </div>
             </template>
+
+            <button
+              type="button"
+              class="mt-4 flex w-full items-center justify-center gap-2 border-t border-gray-100 pt-3 text-sm font-medium text-primary-600 transition-colors hover:text-primary-700 dark:border-dark-700 dark:text-primary-400 dark:hover:text-primary-300"
+              @click="openDeploymentCenter"
+            >
+              <Icon name="server" size="sm" :stroke-width="2" />
+              {{ t('deployment.title') }}
+            </button>
           </div>
         </div>
       </transition>
@@ -634,6 +652,12 @@
     <span v-else-if="version" class="text-xs text-gray-500 dark:text-dark-400">
       v{{ version }}
     </span>
+
+    <DeploymentCenterDialog
+      v-if="isAdmin"
+      :show="deploymentCenterOpen"
+      @close="deploymentCenterOpen = false"
+    />
   </div>
 </template>
 
@@ -641,14 +665,9 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore, useAppStore } from '@/stores'
-import {
-  performUpdate,
-  restartService,
-  getRollbackVersions,
-  rollback as rollbackAPI,
-  type RollbackVersionInfo
-} from '@/api/admin/system'
+import { getRollbackVersions, type RollbackVersionInfo } from '@/api/admin/system'
 import { useClipboard } from '@/composables/useClipboard'
+import DeploymentCenterDialog from '@/components/common/DeploymentCenterDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 
 const GITHUB_REPO = 'Wei-Shaw/sub2api'
@@ -668,6 +687,7 @@ const isAdmin = computed(() => authStore.isAdmin)
 
 const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
+const deploymentCenterOpen = ref(false)
 
 // Use store's cached version state
 const loading = computed(() => appStore.versionLoading)
@@ -751,26 +771,17 @@ async function refreshVersion(force = true) {
   await appStore.fetchVersion(force)
 }
 
-async function handleUpdate() {
-  if (updating.value) return
-
-  updating.value = true
+function openDeploymentCenter() {
+  closeDropdown()
   updateError.value = ''
   updateSuccess.value = false
+  needRestart.value = false
+  resetRollbackState()
+  deploymentCenterOpen.value = true
+}
 
-  try {
-    const result = await performUpdate()
-    successKind.value = 'update'
-    updateSuccess.value = true
-    needRestart.value = result.need_restart
-    // Clear version cache to reflect update completed
-    appStore.clearVersionCache()
-  } catch (error: unknown) {
-    const err = error as { response?: { data?: { message?: string } }; message?: string }
-    updateError.value = err.response?.data?.message || err.message || t('version.updateFailed')
-  } finally {
-    updating.value = false
-  }
+function handleUpdate() {
+  openDeploymentCenter()
 }
 
 function resetRollbackState() {
@@ -782,18 +793,9 @@ function resetRollbackState() {
   manualTab.value = 'script'
 }
 
-async function toggleRollbackPanel() {
+function toggleRollbackPanel() {
   if (!isAdmin.value) return
-  rollbackPanelOpen.value = !rollbackPanelOpen.value
-  // Source builds only show a hint, no version list to fetch
-  if (
-    rollbackPanelOpen.value &&
-    isReleaseBuild.value &&
-    rollbackVersions.value.length === 0 &&
-    !rollbackVersionsLoading.value
-  ) {
-    await loadRollbackVersions()
-  }
+  openDeploymentCenter()
 }
 
 async function loadRollbackVersions() {
@@ -825,80 +827,13 @@ function formatPublishedAt(publishedAt: string): string {
   return date.toLocaleDateString()
 }
 
-async function handleRollback() {
+function handleRollback() {
   if (!isAdmin.value) return
-  if (rollingBack.value || !selectedRollbackVersion.value) return
-
-  rollingBack.value = true
-  rollbackError.value = ''
-
-  try {
-    const result = await rollbackAPI(selectedRollbackVersion.value)
-    successKind.value = 'rollback'
-    updateSuccess.value = true
-    needRestart.value = result.need_restart
-    rollbackPanelOpen.value = false
-    // Clear version cache so the next check reflects the rolled-back version
-    appStore.clearVersionCache()
-  } catch (error: unknown) {
-    const err = error as { response?: { data?: { message?: string } }; message?: string }
-    rollbackError.value = err.response?.data?.message || err.message || t('version.rollbackFailed')
-  } finally {
-    rollingBack.value = false
-  }
+  openDeploymentCenter()
 }
 
-async function handleRestart() {
-  if (restarting.value) return
-
-  restarting.value = true
-  restartCountdown.value = 8
-
-  try {
-    await restartService()
-    // Service will restart, page will reload automatically or show disconnected
-  } catch (error) {
-    // Expected - connection will be lost during restart
-    console.log('Service restarting...')
-  }
-
-  // Start countdown
-  const countdownInterval = setInterval(() => {
-    restartCountdown.value--
-    if (restartCountdown.value <= 0) {
-      clearInterval(countdownInterval)
-      // Try to check if service is back before reload
-      checkServiceAndReload()
-    }
-  }, 1000)
-}
-
-async function checkServiceAndReload() {
-  const maxRetries = 5
-  const retryDelay = 1000
-
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const response = await fetch('/health', {
-        method: 'GET',
-        cache: 'no-cache'
-      })
-      if (response.ok) {
-        // Service is back, reload page
-        window.location.reload()
-        return
-      }
-    } catch {
-      // Service not ready yet
-    }
-
-    if (i < maxRetries - 1) {
-      await new Promise((resolve) => setTimeout(resolve, retryDelay))
-    }
-  }
-
-  // After retries, reload anyway
-  window.location.reload()
+function handleRestart() {
+  openDeploymentCenter()
 }
 
 function handleClickOutside(event: MouseEvent) {

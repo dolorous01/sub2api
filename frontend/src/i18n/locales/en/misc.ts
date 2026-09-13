@@ -59,6 +59,83 @@ export default {
     dockerRecreate: 'Recreate the container'
   },
 
+  deployment: {
+    title: 'Update Management',
+    subtitle: 'Sub2API and Canvas are independent release units that can be updated or rolled back separately.',
+    automaticSync: 'A read-only data and API key sync check runs automatically after every healthy update',
+    refresh: 'Refresh Status',
+    loadFailed: 'Unable to load deployment status',
+    sub2api: 'Sub2API',
+    canvas: 'Canvas Studio',
+    blueGreenMode: 'Blue-green release; Canvas is not recreated',
+    stableMode: 'Independent stable release; Sub2API is not recreated',
+    currentVersion: 'Current Version',
+    approvedVersion: 'Approved Version',
+    noOperations: 'No deployment has been recorded',
+    update: 'Update',
+    rollback: 'Rollback',
+    releaseNotes: 'Release Notes',
+    confirmTitle: 'Confirm Deployment',
+    confirmUpdate:
+      'Only {name} will be updated; the other service stays unchanged. A data and API key sync check runs after the new version is healthy.',
+    confirmRollback:
+      'Only {name} will be rolled back to its recorded previous version; the other service stays unchanged.',
+    starting: 'Starting...',
+    operationRunning: '{action} in progress',
+    status: {
+      running: 'In Progress',
+      failed: 'Check Required',
+      available: 'Update Available',
+      current: 'Current',
+      blocked: 'Unavailable'
+    },
+    actions: {
+      update: 'update',
+      rollback: 'rollback'
+    },
+    operationStates: {
+      succeeded: '{action} succeeded',
+      failed: '{action} failed',
+      interrupted: '{action} interrupted',
+      queued: '{action} queued',
+      running: '{action} in progress'
+    },
+    sync: {
+      pending: 'The sync check will run automatically after deployment',
+      notRun: 'The sync check did not run',
+      failed: 'The sync check failed; inspect the redacted report on the server',
+      notRequired: 'Rollback operations do not run a sync check',
+      ok: 'Data and API key sync check passed',
+      attention: 'Sync check completed with {count} item(s) requiring manual attention'
+    },
+    blockReasons: {
+      canvas_stable_required:
+        'Independent Canvas stable has not taken over /studio. Web updates remain blocked until the initial cutover is complete.',
+      release_not_approved: 'No new immutable image is registered in the operator catalog.',
+      deployment_in_progress: 'Another deployment is running. Wait for it to finish.',
+      rollback_not_available: 'No recorded rollback target is available.',
+      unknown: 'Deployment prerequisites are not currently satisfied.'
+    },
+    errors: {
+      deployment_operator_disabled: 'The independent deployment operator is not enabled on this server.',
+      admin_auth_unavailable:
+        'Administrator authentication is temporarily unavailable. Retry after the update switch.',
+      admin_access_required: 'Only administrators may run deployment operations.',
+      canvas_stable_required: 'Complete the initial independent Canvas stable cutover first.',
+      release_not_approved: 'No approved release is available. Update the operator catalog first.',
+      deployment_in_progress: 'A deployment operation is already running.',
+      rollback_not_available: 'No recorded rollback target is available.',
+      deployment_command_failed:
+        'The controlled deployment script failed. Inspect the operation log and service health.',
+      reconciliation_failed:
+        'The version switched, but the automatic sync check failed. Inspect the redacted report.',
+      reconciliation_report_missing: 'The release script did not create its required sync report.',
+      operator_restarted:
+        'The deployment operator restarted before the task finished. Verify versions and health before retrying.',
+      unknown: 'The update service returned an unrecognized error.'
+    }
+  },
+
   // Recharge / Subscription Page
   purchase: {
     title: 'Recharge / Subscription',

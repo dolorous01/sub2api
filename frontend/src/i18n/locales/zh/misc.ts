@@ -58,6 +58,77 @@ export default {
     dockerRecreate: '重新创建容器'
   },
 
+  deployment: {
+    title: '更新管理',
+    subtitle: 'Sub2API 与创作台是两个独立发布单元，可分别更新和回滚。',
+    automaticSync: '每次更新通过健康检查后，自动执行数据与 Key 同步检查',
+    refresh: '刷新状态',
+    loadFailed: '无法读取更新状态',
+    sub2api: 'Sub2API',
+    canvas: '创作台',
+    blueGreenMode: '蓝绿发布，不重建创作台',
+    stableMode: '独立 stable 发布，不重建 Sub2API',
+    currentVersion: '当前版本',
+    approvedVersion: '已批准版本',
+    noOperations: '暂无发布记录',
+    update: '更新',
+    rollback: '回滚',
+    releaseNotes: '发布说明',
+    confirmTitle: '确认发布操作',
+    confirmUpdate:
+      '只更新 {name}；另一边保持不变。新版本健康后将自动执行数据与 Key 同步检查。',
+    confirmRollback: '只回滚 {name} 到上一个已记录版本；另一边保持不变。',
+    starting: '正在启动...',
+    operationRunning: '正在{action}',
+    status: {
+      running: '执行中',
+      failed: '需检查',
+      available: '可更新',
+      current: '当前',
+      blocked: '暂不可用'
+    },
+    actions: {
+      update: '更新',
+      rollback: '回滚'
+    },
+    operationStates: {
+      succeeded: '{action}成功',
+      failed: '{action}失败',
+      interrupted: '{action}中断',
+      queued: '等待{action}',
+      running: '正在{action}'
+    },
+    sync: {
+      pending: '发布成功后将自动执行同步检查',
+      notRun: '同步检查未执行',
+      failed: '同步检查失败，请查看服务器上的脱敏报告',
+      notRequired: '回滚操作不执行同步检查',
+      ok: '数据与 Key 同步检查通过',
+      attention: '同步检查完成，有 {count} 项需要手动处理'
+    },
+    blockReasons: {
+      canvas_stable_required: '独立创作台 stable 尚未接管 /studio，完成首次切流前不能从网页更新。',
+      release_not_approved: '运维 catalog 尚未登记新的不可变镜像。',
+      deployment_in_progress: '另一个发布任务正在执行，请等待完成。',
+      rollback_not_available: '没有可回滚的已记录版本。',
+      unknown: '当前发布条件未满足，请查看运维状态。'
+    },
+    errors: {
+      deployment_operator_disabled: '服务器尚未启用独立发布控制器。',
+      admin_auth_unavailable: '管理员鉴权服务暂时不可用，更新切换期间可稍后重试。',
+      admin_access_required: '只有管理员可以执行发布操作。',
+      canvas_stable_required: '请先完成独立创作台 stable 的首次接管。',
+      release_not_approved: '没有已批准的新版本，请先更新运维 catalog。',
+      deployment_in_progress: '已有发布任务正在执行。',
+      rollback_not_available: '没有可回滚的已记录版本。',
+      deployment_command_failed: '受控发布脚本执行失败，请检查任务日志和服务健康状态。',
+      reconciliation_failed: '版本已切换，但自动同步检查失败；请检查脱敏对账报告。',
+      reconciliation_report_missing: '发布脚本未生成必须的同步检查报告。',
+      operator_restarted: '发布控制器在任务完成前重启，请先核对当前版本和健康状态。',
+      unknown: '更新服务返回了未识别的错误。'
+    }
+  },
+
   // Recharge / Subscription Page
   purchase: {
     title: '充值/订阅',
