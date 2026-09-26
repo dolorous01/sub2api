@@ -12,7 +12,6 @@ import redeemAPI from './redeem'
 import promoAPI from './promo'
 import announcementsAPI from './announcements'
 import settingsAPI from './settings'
-import systemAPI from './system'
 import subscriptionsAPI from './subscriptions'
 import usageAPI from './usage'
 import geminiAPI from './gemini'
@@ -50,7 +49,6 @@ export const adminAPI = {
   promo: promoAPI,
   announcements: announcementsAPI,
   settings: settingsAPI,
-  system: systemAPI,
   subscriptions: subscriptionsAPI,
   usage: usageAPI,
   gemini: geminiAPI,
@@ -86,7 +84,6 @@ export {
   promoAPI,
   announcementsAPI,
   settingsAPI,
-  systemAPI,
   subscriptionsAPI,
   usageAPI,
   geminiAPI,

@@ -164,6 +164,7 @@ export default {
   // Navigation
   nav: {
     dashboard: 'Dashboard',
+    canvasStudio: 'Canvas Studio',
     announcements: 'Announcements',
     apiKeys: 'API Keys',
     batchImage: 'Batch Images',

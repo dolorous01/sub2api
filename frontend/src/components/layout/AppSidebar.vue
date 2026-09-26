@@ -24,13 +24,50 @@
         >
           {{ siteName }}
         </router-link>
-        <!-- Version Badge -->
-        <VersionBadge :version="siteVersion" />
       </div>
     </div>
 
     <!-- Navigation -->
     <nav ref="sidebarNavRef" class="sidebar-nav scrollbar-hide">
+      <div class="sidebar-section">
+        <a
+          id="sidebar-canvas-studio"
+          href="/studio/"
+          class="sidebar-link mb-1"
+          :class="{ 'sidebar-link-collapsed': sidebarCollapsed }"
+          :title="sidebarCollapsed ? t('nav.canvasStudio') : undefined"
+          @click="closeMobile"
+        >
+          <BatchImageIcon class="h-5 w-5 flex-shrink-0" />
+          <span
+            class="sidebar-label"
+            :class="{ 'sidebar-label-collapsed': sidebarCollapsed }"
+            :aria-hidden="sidebarCollapsed ? 'true' : 'false'"
+          >
+            {{ t('nav.canvasStudio') }}
+          </span>
+        </a>
+
+        <button
+          v-if="isAdmin"
+          id="sidebar-deployment-center"
+          type="button"
+          class="sidebar-link mb-1 w-full"
+          :class="{ 'sidebar-link-collapsed': sidebarCollapsed }"
+          :title="sidebarCollapsed ? t('deployment.title') : undefined"
+          @click="openDeploymentCenter"
+        >
+          <ServerIcon class="h-5 w-5 flex-shrink-0" />
+          <span
+            class="sidebar-label"
+            :class="{ 'sidebar-label-collapsed': sidebarCollapsed }"
+            :aria-hidden="sidebarCollapsed ? 'true' : 'false'"
+          >
+            {{ t('deployment.title') }}
+          </span>
+        </button>
+      </div>
+
       <!-- Admin View: Admin menu first, then personal menu -->
       <template v-if="isAdmin">
         <!-- Admin Section -->
@@ -177,6 +214,12 @@
     </div>
   </aside>
 
+  <DeploymentCenterDialog
+    v-if="isAdmin"
+    :show="deploymentCenterOpen"
+    @close="deploymentCenterOpen = false"
+  />
+
   <!-- Mobile Overlay -->
   <transition name="fade">
     <div
@@ -192,7 +235,7 @@ import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'v
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
-import VersionBadge from '@/components/common/VersionBadge.vue'
+import DeploymentCenterDialog from '@/components/common/DeploymentCenterDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
@@ -250,6 +293,7 @@ const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const mobileOpen = computed(() => appStore.mobileOpen)
 const isAdmin = computed(() => authStore.isAdmin)
 const sidebarNavRef = ref<HTMLElement | null>(null)
+const deploymentCenterOpen = ref(false)
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
 const homePath = computed(() => (isAdmin.value ? '/admin/dashboard' : '/dashboard'))
@@ -263,7 +307,6 @@ const groupExpandOverrides = ref<Map<string, boolean>>(new Map())
 // Site settings from appStore (cached, no flicker)
 const siteName = computed(() => appStore.siteName)
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
-const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
 // SVG Icon Components
@@ -871,6 +914,11 @@ function toggleTheme() {
 
 function closeMobile() {
   appStore.setMobileOpen(false)
+}
+
+function openDeploymentCenter() {
+  closeMobile()
+  deploymentCenterOpen.value = true
 }
 
 function handleMenuItemClick(itemPath: string) {

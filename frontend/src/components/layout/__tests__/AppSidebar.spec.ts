@@ -52,7 +52,7 @@ describe('AppSidebar collapsible groups', () => {
 })
 
 describe('AppSidebar header styles', () => {
-  it('does not clip the version badge dropdown', () => {
+  it('does not clip the site name', () => {
     const sidebarHeaderBlockMatch = styleSource.match(/\.sidebar-header\s*\{[\s\S]*?\n {2}\}/)
     const sidebarBrandBlockMatch = componentSource.match(/\.sidebar-brand\s*\{[\s\S]*?\n\}/)
 
@@ -60,6 +60,26 @@ describe('AppSidebar header styles', () => {
     expect(sidebarBrandBlockMatch).not.toBeNull()
     expect(sidebarHeaderBlockMatch?.[0]).not.toContain('@apply overflow-hidden;')
     expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
+  })
+})
+
+describe('AppSidebar standalone Canvas entry', () => {
+  it('shows a direct Canvas Studio link outside role-specific navigation', () => {
+    expect(componentSource).toContain('id="sidebar-canvas-studio"')
+    expect(componentSource).toContain('href="/studio/"')
+    expect(componentSource).toContain("t('nav.canvasStudio')")
+
+    const studioEntry = componentSource.indexOf('id="sidebar-canvas-studio"')
+    const adminNavigation = componentSource.indexOf('<!-- Admin View: Admin menu first')
+    expect(studioEntry).toBeGreaterThan(-1)
+    expect(studioEntry).toBeLessThan(adminNavigation)
+  })
+
+  it('opens controlled update management directly for administrators', () => {
+    expect(componentSource).toContain('id="sidebar-deployment-center"')
+    expect(componentSource).toContain('@click="openDeploymentCenter"')
+    expect(componentSource).toContain('<DeploymentCenterDialog')
+    expect(componentSource).not.toContain('VersionBadge')
   })
 })
 
